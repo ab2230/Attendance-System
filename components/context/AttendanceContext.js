@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const AttendanceContext = createContext();
 
+// AttendanceContext.js
 export const AttendanceProvider = ({ children }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
 
@@ -10,7 +11,6 @@ export const AttendanceProvider = ({ children }) => {
     loadAttendanceRecords();
   }, []);
 
-  // Load attendance records from AsyncStorage
   const loadAttendanceRecords = async () => {
     try {
       const storedRecords = await AsyncStorage.getItem("attendance");
@@ -20,19 +20,15 @@ export const AttendanceProvider = ({ children }) => {
     }
   };
 
-  // Add a new attendance record
   const markAttendance = async (newRecord) => {
     const updatedRecords = [...attendanceRecords, newRecord];
     setAttendanceRecords(updatedRecords);
     await AsyncStorage.setItem("attendance", JSON.stringify(updatedRecords));
   };
 
-  // Update an existing attendance record
   const updateAttendance = async (updatedRecord) => {
     const updatedRecords = attendanceRecords.map((record) =>
-      record.date === updatedRecord.date &&
-      record.classId === updatedRecord.classId &&
-      record.programId === updatedRecord.programId
+      record.id === updatedRecord.id
         ? updatedRecord
         : record
     );
@@ -40,9 +36,17 @@ export const AttendanceProvider = ({ children }) => {
     await AsyncStorage.setItem("attendance", JSON.stringify(updatedRecords));
   };
 
+  const deleteAttendance = async (recordToDelete) => {
+    const updatedRecords = attendanceRecords.filter(
+      (record) => record.id !== recordToDelete.id
+    );
+    setAttendanceRecords(updatedRecords);
+    await AsyncStorage.setItem("attendance", JSON.stringify(updatedRecords));
+  };
+
   return (
     <AttendanceContext.Provider
-      value={{ attendanceRecords, markAttendance, updateAttendance }}
+      value={{ attendanceRecords, markAttendance, updateAttendance, deleteAttendance }}
     >
       {children}
     </AttendanceContext.Provider>

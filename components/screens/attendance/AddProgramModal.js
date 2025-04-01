@@ -1,79 +1,199 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing } from "react-native";
 import CustomTextInput from "../../common/CustomTextInput";
 import AntDesign from 'react-native-vector-icons/AntDesign';
+import LinearGradient from 'react-native-linear-gradient';
+import { BlurView } from '@react-native-community/blur';
 
+const { width } = Dimensions.get('window');
 
-const AddProgramModal = ({programName, setProgramName, visible, onClose, onAddProgram}) => {
+const AddProgramModal = ({ programName, setProgramName, visible, onClose, onAddProgram }) => {
+  const scaleValue = useRef(new Animated.Value(0)).current;
+  const fadeValue = useRef(new Animated.Value(0)).current;
+
+   useEffect(() => {
+      if (visible) {
+        Animated.parallel([
+          Animated.timing(scaleValue, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.back(1.5)),
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeValue, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          })
+        ]).start();
+      } else {
+        Animated.parallel([
+          Animated.timing(scaleValue, {
+            toValue: 0,
+            duration: 200,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeValue, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+          })
+        ]).start();
+      }
+    }, [visible]);
+
   return (
-    <Modal visible={visible} animationType="slide" transparent={true}>
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContainer}>
-        {/* Close Button */}
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <AntDesign name="close" size={24} color="black" />
-        </TouchableOpacity>
-  
-        <Text style={styles.title}>Add Program</Text>
-        {/* Add Member */}
-        <View style={styles.inputContainer}>
-          <CustomTextInput 
-            label="Program Name"
-            input={programName}
-            placeholder="Eg: Course A"
-            setInput={(value) => setProgramName(value)}
-          />
-          <TouchableOpacity onPress={onAddProgram} style={styles.button}>
-            <Text style={styles.buttonText}>Add</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-</Modal>
-  )
-}
+    <Modal visible={visible} animationType="none" transparent={true}>
+      <Animated.View style={[styles.modalOverlay, { opacity: fadeValue }]}>
+        <BlurView
+          style={styles.absolute}
+          blurType="dark"
+          blurAmount={10}
+          reducedTransparencyFallbackColor="black"
+        />
+        
+        <Animated.View style={[
+          styles.modalContainer, 
+          { 
+            transform: [{ scale: scaleValue }],
+            opacity: fadeValue
+          }
+        ]}>
+          {/* Header with gradient */}
+          <LinearGradient
+            colors={['#667eea', '#764ba2']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.modalHeader}
+          >
+            <Text style={styles.title}>Create New Program</Text>
+            <TouchableOpacity 
+              onPress={onClose} 
+              style={styles.closeButton}
+              activeOpacity={0.7}
+            >
+              <AntDesign name="close" size={24} color="white" />
+            </TouchableOpacity>
+          </LinearGradient>
 
-export default AddProgramModal
+          {/* Modal Content */}
+          <View style={styles.modalContent}>
+            <CustomTextInput 
+              label="Program Name"
+              input={programName}
+              placeholder="Eg: Advanced Yoga Course"
+              setInput={(value) => setProgramName(value)}
+              containerStyle={styles.inputField}
+            />
+
+            <TouchableOpacity 
+              onPress={onAddProgram} 
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#43e97b', '#38f9d7']}
+                style={styles.button}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.buttonText}>Create Program</Text>
+                <AntDesign 
+                  name="pluscircle" 
+                  size={20} 
+                  color="white" 
+                  style={styles.buttonIcon}
+                />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+};
 
 const styles = StyleSheet.create({
-    modalOverlay: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  absolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+  },
+  modalContainer: {
+    width: width * 0.85,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
     },
-    modalContainer: {
-      width: '90%',
-      backgroundColor: '#fff',
-      borderRadius: 10,
-      padding: 20,
-      alignItems: 'center',
-      position: 'relative',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  modalHeader: {
+    paddingVertical: 20,
+    paddingHorizontal: 25,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalContent: {
+    padding: 25,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.5,
+    flexShrink: 1,
+    paddingRight: 20,
+  },
+  closeButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    padding: 5,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputField: {
+    marginBottom: 25,
+  },
+  button: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
     },
-    closeButton: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      padding: 5,
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: "bold",
-      marginBottom: 10,
-      textAlign: "center",
-    },
-    inputContainer: {
-      width: '100%',
-    },
-    button: {
-      marginTop: 15,
-      backgroundColor: "#007bff",
-      padding: 12,
-      borderRadius: 8,
-      alignItems: 'center',
-    },
-    buttonText: {
-      color: "white",
-      fontWeight: "bold",
-    },
-  });
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+    elevation: 6,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  buttonIcon: {
+    marginLeft: 10,
+  },
+});
+
+export default AddProgramModal;

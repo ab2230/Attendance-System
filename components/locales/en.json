@@ -1,0 +1,22 @@
+{
+    "classAndProgram": "Class and Program",
+    "classes": "Classes",
+    "programs": "Programs",
+    "addClass": "Add Class",
+    "addProgram": "Add Program",
+    "add": "Add",
+    "update": "Update",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "selectedClass": "Selected Class",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "areYouSure": "Are you sure?",
+    "uneroll": "Uneroll",
+    "enrollAll": "Enroll All",
+    "enrollSelected": "Enroll Selected",
+    "enrollStudents": "Enroll Students",
+    "searchStudents": "Search Students",
+    "close": "Close"
+
+}

@@ -8,9 +8,15 @@ import { MemberProvider } from './components/context/MemberContext';
 import { ProgramProvider } from './components/context/ProgramContext';
 import { AttendanceProvider } from './components/context/AttendanceContext';
 
+import './components/i18n';
+import { checkForUpdate } from './checkForUpdate';
+
 const Stack = createStackNavigator();
 
 const App = () => {
+  React.useEffect(()=>{
+    checkForUpdate();
+  },[])
   return (
   <ClassProvider>
   <MemberProvider>

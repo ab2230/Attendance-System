@@ -27,8 +27,22 @@ export const ClassProvider = ({ children }) => {
     await AsyncStorage.setItem("classes", JSON.stringify(updatedClasses));
   };
 
+  const updateClass = async (updatedClass) => {
+    const updatedClasses = classes.map((cls) =>
+      cls.id === updatedClass.id ? updatedClass : cls
+    );
+    setClasses(updatedClasses);
+    await AsyncStorage.setItem("classes", JSON.stringify(updatedClasses));
+  };
+
+  const deleteClass = async (id) => {
+    const updatedClasses = classes.filter((cls) => cls.id !== id);
+    setClasses(updatedClasses);
+    await AsyncStorage.setItem("classes", JSON.stringify(updatedClasses));
+  };
+
   return (
-    <ClassContext.Provider value={{ classes, addClass }}>
+    <ClassContext.Provider value={{ classes, addClass, updateClass, deleteClass }}>
       {children}
     </ClassContext.Provider>
   );

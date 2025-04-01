@@ -1,0 +1,23 @@
+
+    {
+        "classAndProgram": "ክፍል እና ፕሮግራም",
+        "classes": "ክፍሎች",
+        "programs": "ፕሮግራሞች",
+        "addClass": "ክፍል ጨምር",
+        "addProgram": "ፕሮግራም አክል",
+        "add": "አክል",
+        "update": "አዘምን",
+        "firstName": "ስም",
+        "lastName": "የአባት ስም",
+        "selectedClass": "የተመረጠ ክፍል",
+        "delete": "አስወግድ",
+        "cancel": "ሰርዝ",
+        "areYouSure": "እርግጠኛ ነኝ?",
+        "uneroll": "ከምዝገባ ይውጡ",
+        "enrollAll": "ሁሉንም ይመዝገቡ",
+        "enrollSelected": "የተመረጠውን ይመዝገቡ",
+        "enrollStudents": "የተመዘገቡ ተማሪዎች",
+        "searchStudents": "ተማሪዎችን ይፈልጉ",
+        "close": "ዝጋ"
+    
+    }

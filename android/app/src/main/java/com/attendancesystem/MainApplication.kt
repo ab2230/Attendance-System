@@ -1,4 +1,4 @@
-package com.attendancesystem
+package com.attendancesystemapp
 
 import android.app.Application
 import com.facebook.react.PackageList

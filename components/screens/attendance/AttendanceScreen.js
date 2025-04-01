@@ -1,34 +1,65 @@
-import React, { useState, useContext } from "react";
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, Modal } from "react-native";
-import TopNavigator from "../../common/TopNavigator";
-import AttendanceModal from "./AttendanceModal";
+// AttendanceScreen.js
+import React, { useState, useContext } from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity, Text, ScrollView, Alert } from 'react-native';
+import TopNavigator from '../../common/TopNavigator';
+import AttendanceModal from './AttendanceModal';
+import EditAttendanceModal from './EditAttendanceModal';
 import AddButton from '../../common/addButton';
-import { AttendanceContext } from "../../context/AttendanceContext";
-import { MemberContext } from "../../context/MemberContext";
-import { ClassContext } from "../../context/ClassContext";
-import { ProgramContext } from "../../context/ProgramContext";
+import { AttendanceContext } from '../../context/AttendanceContext';
+import { MemberContext } from '../../context/MemberContext';
+import { ClassContext } from '../../context/ClassContext';
+import { ProgramContext } from '../../context/ProgramContext';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import CustomDropDown from '../../common/CustomDropDown';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import LinearGradient from 'react-native-linear-gradient';
 
 const AttendanceScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const { attendanceRecords, markAttendance, updateAttendance: saveAttendanceRecord } = useContext(AttendanceContext);
+  const { attendanceRecords, updateAttendance, deleteAttendance } = useContext(AttendanceContext);
   const { members } = useContext(MemberContext);
   const { classes } = useContext(ClassContext);
   const { programs } = useContext(ProgramContext);
 
-  // Function to get class name by classId
+  const [filterProgram, setFilterProgram] = useState("");
+  const [filterMember, setFilterMember] = useState("");
+  const [filterDate, setFilterDate] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   const getClassName = (classId) => {
     const classObj = classes.find((cls) => cls.id === classId);
     return classObj ? classObj.name : "Unknown Class";
   };
 
-  // Function to get program name by programId
   const getProgramName = (programId) => {
     const programObj = programs.find((prog) => prog.id === programId);
     return programObj ? programObj.name : "Unknown Program";
   };
 
-  // Function to handle updating attendance
+  const getMemberName = (memberId) => {
+    const memberObj = members.find((mem) => mem.id === memberId);
+    return memberObj ? `${memberObj.firstName} ${memberObj.lastName}` : "Unknown Member";
+  };
+
+  const membersDropdown = [
+    { name: "All Members", id: 0, classId: null },
+    ...members.map((member) => ({
+      name: `${member.firstName} ${member.lastName}`,
+      id: member.id,
+      classId: member.classId,
+    })),
+  ];
+
+  const filteredRecords = attendanceRecords.filter((record) => {
+    return (
+      (filterProgram === "" || record.programId === filterProgram) &&
+      (filterMember === 0 || filterMember === "" || 
+        record.members.some((member) => member.memberId === filterMember)) &&
+      (filterDate === null || new Date(record.date).toDateString() === filterDate.toDateString())
+    );
+  });
+
   const handleUpdateAttendance = (memberId, status) => {
     const updatedMembers = selectedRecord.members.map((member) =>
       member.memberId === memberId ? { ...member, status } : member
@@ -36,181 +67,287 @@ const AttendanceScreen = () => {
     setSelectedRecord({ ...selectedRecord, members: updatedMembers });
   };
 
-  // Function to save updated attendance
   const handleSaveUpdatedAttendance = () => {
-    saveAttendanceRecord(selectedRecord);
-    setSelectedRecord(null); // Close the modal after saving
+    updateAttendance(selectedRecord);
+    setSelectedRecord(null);
+  };
+
+  const handleDeleteAttendance = (record) => {
+    Alert.alert(
+      "Delete Attendance",
+      "Are you sure you want to delete this attendance record?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          onPress: () => {
+            deleteAttendance(record);
+            setSelectedRecord(null);
+          } 
+        },
+      ]
+    );
   };
 
   return (
     <View style={styles.container}>
       <TopNavigator title="Attendance Records" />
-      <View style={{ padding: 16, backgroundColor: "#f5f5f5"}}>
-      <FlatList
-        data={attendanceRecords}
-        keyExtractor={(item) => item.date}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.recordCard}
-            onPress={() => setSelectedRecord(item)}
+      
+      {/* Filters Section */}
+      <LinearGradient 
+        colors={['#f8f9fa', '#e9ecef']} 
+        style={styles.filterContainer}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+      >
+        <CustomDropDown
+          label="Select Program"
+          data={programs}
+          currentSelected={programs.find((prog) => prog.id === filterProgram)}
+          setSelected={(input) => setFilterProgram(input.id)}
+          containerStyle={styles.dropdown}
+        />
+        
+        <CustomDropDown
+          label="Select Member"
+          data={membersDropdown}
+          currentSelected={membersDropdown.find((mem) => mem.id === filterMember)}
+          setSelected={(input) => setFilterMember(input.id)}
+          containerStyle={styles.dropdown}
+        />
+        
+        <TouchableOpacity 
+          onPress={() => setShowDatePicker(true)} 
+          style={styles.datePickerButton}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#ffffff', '#f1f3f5']}
+            style={styles.datePickerGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
           >
-            <Text style={styles.recordDate}>{new Date(item.date).toDateString()}</Text>
-            <Text style={styles.recordDetails}>
-              Class: {getClassName(item.classId)} | Program: {getProgramName(item.programId)}
+            <Icon name="calendar-today" size={20} color="#6c757d" />
+            <Text style={styles.dateText}>
+              {filterDate ? filterDate.toLocaleDateString() : "Select Date"}
             </Text>
-            <Text style={styles.recordDetails}>
-              Members: {item.members.length}
-            </Text>
-          </TouchableOpacity>
-        )}
-      />
-     
+            <Icon name="chevron-right" size={20} color="#6c757d" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </LinearGradient>
 
-      {/* Modal to show attendance details */}
-      <Modal visible={!!selectedRecord} transparent={true} animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Attendance Details</Text>
-            <Text style={styles.modalSubtitle}>
-              Date: {new Date(selectedRecord?.date).toDateString()}
-            </Text>
-            <Text style={styles.modalSubtitle}>
-              Class: {getClassName(selectedRecord?.classId)} | Program: {getProgramName(selectedRecord?.programId)}
-            </Text>
+      {showDatePicker && (
+        <DateTimePicker
+          value={filterDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={(event, date) => {
+            setShowDatePicker(false);
+            if (date) setFilterDate(date);
+          }}
+        />
+      )}
 
-            {/* Table for member attendance */}
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={styles.headerText}>Name</Text>
-                <Text style={styles.headerText}>Status</Text>
-              </View>
-              {selectedRecord?.members.map((member) => {
-                const memberInfo = members.find((m) => m.id === member.memberId);
-                return (
-                  <View key={member.memberId} style={styles.tableRow}>
-                    <Text style={styles.rowText}>
-                      {memberInfo?.firstName} {memberInfo?.lastName}
+      {/* Attendance Records List */}
+      <ScrollView style={styles.scrollContainer}>
+        {filteredRecords.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Icon name="event-note" size={50} color="#adb5bd" />
+            <Text style={styles.emptyText}>No attendance records found</Text>
+            <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+          </View>
+        ) : (
+          <View style={styles.listContainer}>
+            {filteredRecords.map((record) => (
+              <TouchableOpacity 
+                key={record.id} 
+                onPress={() => setSelectedRecord(record)}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#ffffff', '#f8f9fa']}
+                  style={styles.recordCard}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.recordDate}>
+                      {new Date(record.date).toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
                     </Text>
                     <TouchableOpacity
-                      style={[
-                        styles.statusButton,
-                        member.status === "Present" && styles.presentButton,
-                        member.status === "Absent" && styles.absentButton,
-                      ]}
-                      onPress={() =>
-                        handleUpdateAttendance(
-                          member.memberId,
-                          member.status === "Present" ? "Absent" : "Present"
-                        )
-                      }
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteAttendance(record);
+                      }}
+                      style={styles.deleteButton}
                     >
-                      <Text style={styles.statusText}>{member.status}</Text>
+                      <Icon name="delete" size={20} color="#ff6b6b" />
                     </TouchableOpacity>
                   </View>
-                );
-              })}
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => setSelectedRecord(null)}
-              >
-                <Text style={styles.buttonText}>Close</Text>
+                  
+                  <View style={styles.cardBody}>
+                    <View style={styles.infoRow}>
+                      <Icon name="class" size={16} color="#6c757d" />
+                      <Text style={styles.recordText}>
+                        {getProgramName(record.programId)}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                        <Icon name="check-circle" size={16} color="#43e97b" />
+                        <Text style={styles.statText}>
+                          {record.members.filter(m => m.status === 'Present').length} Present
+                        </Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Icon name="cancel" size={16} color="#ff6b6b" />
+                        <Text style={styles.statText}>
+                          {record.members.filter(m => m.status === 'Absent').length} Absent
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
-                onPress={handleSaveUpdatedAttendance}
-              >
-                <Text style={styles.buttonText}>Save Changes</Text>
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
-        </View>
-      </Modal>
+        )}
+      </ScrollView>
 
-      {/* Modal to add new attendance */}
-      </View>
-      <AttendanceModal visible={modalVisible} onClose={() => setModalVisible(false)} />
+      {/* Modals */}
+      <EditAttendanceModal
+        visible={!!selectedRecord}
+        onClose={() => setSelectedRecord(null)}
+        selectedRecord={selectedRecord}
+        members={members}
+        programs={programs}
+        handleUpdateAttendance={handleUpdateAttendance}
+        handleSaveUpdatedAttendance={handleSaveUpdatedAttendance}
+      />
+      
+      <AttendanceModal 
+        visible={modalVisible} 
+        onClose={() => setModalVisible(false)} 
+      />
+      
       <AddButton onClick={() => setModalVisible(true)} />
     </View>
   );
 };
 
-export default AttendanceScreen;
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  recordCard: {
-    backgroundColor: "#fff",
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  filterContainer: {
     padding: 16,
-    borderRadius: 8,
-    marginBottom: 10,
-    shadowColor: "#000",
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  dropdown: {
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    backgroundColor: '#ffffff',
+  },
+  datePickerButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  datePickerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+    borderRadius: 12,
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#343a40',
+    marginHorizontal: 10,
+    flex: 1,
+  },
+  scrollContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  emptyState: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#6c757d',
+    marginTop: 16,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#adb5bd',
+    marginTop: 8,
+  },
+  listContainer: {
+    paddingBottom: 20,
+  },
+  recordCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  recordDate: { fontSize: 16, fontWeight: "bold", color: "#333" },
-  recordDetails: { fontSize: 14, color: "#666", marginTop: 4 },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  modalContainer: {
-    width: "90%",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 20,
-    maxHeight: "80%",
+  recordDate: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#343a40',
   },
-  modalTitle: { fontSize: 20, fontWeight: "bold", color: "#333", marginBottom: 10 },
-  modalSubtitle: { fontSize: 16, color: "#666", marginBottom: 10 },
-  table: { marginVertical: 10 },
-  tableHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
-    paddingBottom: 8,
+  deleteButton: {
+    padding: 6,
+  },
+  cardBody: {
+    paddingLeft: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  headerText: { fontSize: 16, fontWeight: "bold", color: "#333" },
-  tableRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+  recordText: {
+    fontSize: 14,
+    color: '#6c757d',
+    marginLeft: 8,
   },
-  rowText: { fontSize: 16, color: "#333" },
-  statusButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#e0e0e0",
+  statsRow: {
+    flexDirection: 'row',
+    marginTop: 8,
   },
-  presentButton: { backgroundColor: "#28a745" },
-  absentButton: { backgroundColor: "#dc3545" },
-  statusText: { fontSize: 14, color: "#fff", fontWeight: "bold" },
-  buttonContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 20,
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
   },
-  button: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginHorizontal: 5,
+  statText: {
+    fontSize: 14,
+    color: '#6c757d',
+    marginLeft: 4,
   },
-  cancelButton: { backgroundColor: "#dc3545" },
-  saveButton: { backgroundColor: "#007bff" },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 });
+
+export default AttendanceScreen;

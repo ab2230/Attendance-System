@@ -1,4 +1,4 @@
-package com.attendancesystem
+package com.attendancesystemapp
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
