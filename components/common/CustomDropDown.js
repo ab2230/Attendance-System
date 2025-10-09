@@ -101,13 +101,13 @@ const CustomDropDown = ({
             style={[
               textStyles.text_regular,
               {
-                color: currentItem || currentSelected ? color.black : color.gray,
+                color: currentItem || currentSelected ? color.black : color.textGray,
                 fontSize: 16,
               },
             ]}
           >
             {innerLabel ? (
-              <Text style={{ fontSize: scale(12) }}>{innerLabel} </Text>
+              <Text style={{ fontSize: scale(12), color: color.textGray }}>{innerLabel} </Text>
             ) : null}
             {currentItem?.name || null}
           </Text>
@@ -147,7 +147,11 @@ const CustomDropDown = ({
                   <Text
                     style={[
                       textStyles.text_regular,
-                      { backgroundColor: color.white },
+                      { 
+                        backgroundColor: color.white,
+                        color: color.black,
+                        fontSize: 16,
+                      },
                     ]}
                   >
                     {item.name}

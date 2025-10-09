@@ -8,7 +8,7 @@ import MembersInProgram from '../screens/classes/MembersInProgram';
 const ClassesNavigation = () => {
     const Stack = createStackNavigator();
   return (
-    <Stack.Navigator initialRouteName="Classes" screenOptions={{headerShown: false}}>
+    <Stack.Navigator initialRouteName="ClassesNav" screenOptions={{headerShown: false}}>
         <Stack.Screen name="ClassesNav" component={ClassAndProgram} />
         <Stack.Screen name="MembersScreen" component={MembersScreen} />
         <Stack.Screen name="MembersInProgram" component={MembersInProgram} />

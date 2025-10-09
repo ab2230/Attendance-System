@@ -1,10 +1,12 @@
 import React, { createContext, useState, useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import supabaseService from "../../services/supabaseService";
 
 export const ProgramContext = createContext();
 
 export const ProgramProvider = ({ children }) => {
   const [programs, setPrograms] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadPrograms();
@@ -12,51 +14,137 @@ export const ProgramProvider = ({ children }) => {
 
   const loadPrograms = async () => {
     try {
-      const storedPrograms = await AsyncStorage.getItem("programs");
-      if (storedPrograms) setPrograms(JSON.parse(storedPrograms));
+      setLoading(true);
+      setError(null);
+      const programsData = await supabaseService.getPrograms();
+      
+      // Get enrollment data for each program
+      const programsWithEnrollments = await Promise.all(
+        programsData.map(async (program) => {
+          try {
+            const enrollments = await supabaseService.getProgramEnrollments(program.id);
+            return {
+              id: program.id,
+              name: program.name,
+              enrolledStudents: enrollments.map(e => e.member_id),
+              created_at: program.created_at,
+              updated_at: program.updated_at
+            };
+          } catch (error) {
+            console.error(`Error loading enrollments for program ${program.id}:`, error);
+            return {
+              id: program.id,
+              name: program.name,
+              enrolledStudents: [],
+              created_at: program.created_at,
+              updated_at: program.updated_at
+            };
+          }
+        })
+      );
+      
+      setPrograms(programsWithEnrollments);
     } catch (error) {
-      console.log("Error loading programs:", error);
+      console.error("Error loading programs:", error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const addProgram = async (newProgram) => {
-    const updatedPrograms = [...programs, newProgram];
-    setPrograms(updatedPrograms);
-    await AsyncStorage.setItem("programs", JSON.stringify(updatedPrograms));
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const programName = typeof newProgram === 'string' ? newProgram : newProgram.name;
+      await supabaseService.addProgram(programName);
+      await loadPrograms(); // Reload to get updated data
+    } catch (error) {
+      console.error("Error adding program:", error);
+      setError(error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateProgram = async (updatedProgram) => {
-    const updatedPrograms = programs.map((program) =>
-      program.id === updatedProgram.id ? updatedProgram : program
-    );
-    setPrograms(updatedPrograms);
-    await AsyncStorage.setItem("programs", JSON.stringify(updatedPrograms));
+    try {
+      setLoading(true);
+      setError(null);
+      
+      await supabaseService.updateProgram(updatedProgram.id, { name: updatedProgram.name });
+      await loadPrograms(); // Reload to get updated data
+    } catch (error) {
+      console.error("Error updating program:", error);
+      setError(error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const deleteProgram = async (id) => {
-    const updatedPrograms = programs.filter((program) => program.id !== id);
-    setPrograms(updatedPrograms);
-    await AsyncStorage.setItem("programs", JSON.stringify(updatedPrograms));
+    try {
+      setLoading(true);
+      setError(null);
+      
+      await supabaseService.deleteProgram(id);
+      await loadPrograms(); // Reload to get updated data
+    } catch (error) {
+      console.error("Error deleting program:", error);
+      setError(error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const enrollStudents = async (programId, studentIds) => {
-    const updatedPrograms = programs.map((program) =>
-      program.id === programId ? { ...program, enrolledStudents: studentIds } : program
-    );
-    setPrograms(updatedPrograms);
-    await AsyncStorage.setItem("programs", JSON.stringify(updatedPrograms));
+    try {
+      setLoading(true);
+      setError(null);
+      
+      await supabaseService.enrollStudents(programId, studentIds);
+      await loadPrograms(); // Reload to get updated data
+    } catch (error) {
+      console.error("Error enrolling students:", error);
+      setError(error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
+
   const unenrollStudent = async (programId, studentId) => {
-    const updatedPrograms = programs.map((program) =>
-      program.id === programId
-        ? { ...program, enrolledStudents: program.enrolledStudents.filter((id) => id !== studentId) }
-        : program
-    );
-    setPrograms(updatedPrograms);
-    await AsyncStorage.setItem("programs", JSON.stringify(updatedPrograms));
+    try {
+      setLoading(true);
+      setError(null);
+      
+      await supabaseService.unenrollStudent(programId, studentId);
+      await loadPrograms(); // Reload to get updated data
+    } catch (error) {
+      console.error("Error unenrolling student:", error);
+      setError(error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
-    <ProgramContext.Provider value={{ programs, addProgram, updateProgram, deleteProgram, enrollStudents, unenrollStudent }}>
+    <ProgramContext.Provider value={{ 
+      programs, 
+      loading, 
+      error, 
+      addProgram, 
+      updateProgram, 
+      deleteProgram, 
+      enrollStudents, 
+      unenrollStudent, 
+      loadPrograms 
+    }}>
       {children}
     </ProgramContext.Provider>
   );

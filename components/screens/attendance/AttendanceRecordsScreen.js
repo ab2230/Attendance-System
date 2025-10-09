@@ -1,11 +1,17 @@
 import React, { useState, useContext, useEffect } from "react";
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+} from "react-native";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { ClassContext } from "../../context/ClassContext";
 import { MemberContext } from "../../context/MemberContext";
 import { ProgramContext } from "../../context/ProgramContext";
 import { AttendanceContext } from "../../context/AttendanceContext";
-import CustomDropDown from "../../common/CustomDropDown";
 
 const AttendanceRecordsScreen = () => {
   const { attendanceRecords } = useContext(AttendanceContext);
@@ -30,25 +36,21 @@ const AttendanceRecordsScreen = () => {
       return;
     }
 
-    // Step 1: Filter attendance records by programId and date
     const filteredByProgramAndDate = attendanceRecords.filter(
       (record) =>
         record.programId === selectedProgramId &&
         new Date(record.date).toDateString() === selectedDate.toDateString()
     );
 
-    // Step 2: Extract enrolled members from the filtered records
     const enrolledMemberIds = new Set();
     filteredByProgramAndDate.forEach((record) => {
       record.members.forEach((member) => enrolledMemberIds.add(member.memberId));
     });
 
-    // Step 3: Get the full member details for enrolled members
     const enrolledMembersList = members.filter((member) =>
       enrolledMemberIds.has(member.id)
     );
 
-    // Step 4: Further filter enrolled members by classId (if selected)
     const filteredByClass = selectedClassId
       ? enrolledMembersList.filter((member) => member.classId === selectedClassId)
       : enrolledMembersList;
@@ -61,7 +63,7 @@ const AttendanceRecordsScreen = () => {
     DateTimePickerAndroid.open({
       value: selectedDate,
       mode: "date",
-      display: "default",
+      display: Platform.OS === "ios" ? "spinner" : "default",
       onChange: (_, date) => {
         if (date) setSelectedDate(date);
       },
@@ -72,68 +74,122 @@ const AttendanceRecordsScreen = () => {
     const record = filteredRecords.find((rec) =>
       rec.members.some((member) => member.memberId === memberId)
     );
-    if (!record) return "N/A";
+    if (!record) return { status: "N/A", arrivalTime: null };
     const memberRecord = record.members.find((member) => member.memberId === memberId);
-    return memberRecord ? memberRecord.status : "N/A";
+    return memberRecord
+      ? {
+          status: memberRecord.isLate ? "Late" : memberRecord.status,
+          arrivalTime: memberRecord.arrivalTime,
+        }
+      : { status: "N/A", arrivalTime: null };
   };
 
   return (
     <View style={styles.container}>
-        {/* Program Selection */}
-        <CustomDropDown
-          label="Select Program"
-          data={programs}
-          currentSelected={programs.find((program) => program.id === selectedProgramId)}
-          setSelected={(input) => setSelectedProgramId(input.id)}
-          required={true}
-        />
 
-        {/* Class Selection */}
-        <CustomDropDown
-          label="Select Class"
-          data={classes}
-          currentSelected={classes.find((cls) => cls.id === selectedClassId)}
-          setSelected={(input) => setSelectedClassId(input.id)}
-          required={true}
-        />
-
-        {/* Date Selection */}
-        <TouchableOpacity onPress={showDatePicker} style={styles.datePickerButton}>
-          <Text style={styles.dateText}>{selectedDate.toDateString()}</Text>
-        </TouchableOpacity>
-
-        {/* Table Header */}
-        <View style={styles.tableHeader}>
-          <Text style={[styles.headerText, styles.columnName]}>Name</Text>
-          <Text style={[styles.headerText, styles.columnStatus]}>Status</Text>
+      {/* PROGRAM SELECTION */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Select Program</Text>
+        <View style={styles.pickerBox}>
+          {programs.map((program) => (
+            <TouchableOpacity
+              key={program.id}
+              style={[
+                styles.pickerItem,
+                selectedProgramId === program.id && styles.selectedItem,
+              ]}
+              onPress={() => setSelectedProgramId(program.id)}
+            >
+              <Text
+                style={[
+                  styles.pickerText,
+                  selectedProgramId === program.id && styles.selectedText,
+                ]}
+              >
+                {program.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
+      </View>
 
-        {/* Attendance List */}
-        <FlatList
-          data={enrolledMembers}
-          keyExtractor={(item) => item.id.toString()}
-          ListEmptyComponent={<Text style={styles.emptyText}>No members found.</Text>}
-          renderItem={({ item }) => {
-            const status = getMemberStatus(item.id);
+      {/* CLASS SELECTION */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Select Class</Text>
+        <View style={styles.pickerBox}>
+          {classes.map((cls) => (
+            <TouchableOpacity
+              key={cls.id}
+              style={[
+                styles.pickerItem,
+                selectedClassId === cls.id && styles.selectedItem,
+              ]}
+              onPress={() => setSelectedClassId(cls.id)}
+            >
+              <Text
+                style={[
+                  styles.pickerText,
+                  selectedClassId === cls.id && styles.selectedText,
+                ]}
+              >
+                {cls.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
 
-            return (
-              <View style={styles.row}>
-                <Text style={[styles.cell, styles.columnName]}>
-                  {item.firstName} {item.lastName}
-                </Text>
-                <Text
-                  style={[
-                    styles.cell,
-                    styles.columnStatus,
-                    status === "Present" ? styles.present : styles.absent,
-                  ]}
-                >
-                  {status}
-                </Text>
-              </View>
-            );
-          }}
-        />
+      {/* DATE PICKER */}
+      <TouchableOpacity onPress={showDatePicker} style={styles.dateButton}>
+        <Text style={styles.dateButtonText}>
+          {selectedDate.toDateString()}
+        </Text>
+      </TouchableOpacity>
+
+      {/* TABLE HEADER */}
+      <View style={styles.tableHeader}>
+        <Text style={[styles.headerText, styles.nameColumn]}>Name</Text>
+        <Text style={[styles.headerText, styles.statusColumn]}>Status</Text>
+        <Text style={[styles.headerText, styles.timeColumn]}>Arrival</Text>
+      </View>
+
+      {/* ATTENDANCE LIST */}
+      <FlatList
+        data={enrolledMembers}
+        keyExtractor={(item) => item.id.toString()}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No members found for this filter.</Text>
+        }
+        renderItem={({ item }) => {
+          const { status, arrivalTime } = getMemberStatus(item.id);
+
+          return (
+            <View style={styles.row}>
+              <Text style={[styles.cell, styles.nameColumn]}>
+                {item.firstName} {item.lastName}
+              </Text>
+              <Text
+                style={[
+                  styles.cell,
+                  styles.statusColumn,
+                  status === "Present"
+                    ? styles.present
+                    : status === "Late"
+                    ? styles.late
+                    : status === "Absent"
+                    ? styles.absent
+                    : styles.na,
+                ]}
+              >
+                {status}
+              </Text>
+              <Text style={[styles.cell, styles.timeColumn]}>
+                {arrivalTime || "N/A"}
+              </Text>
+            </View>
+          );
+        }}
+      />
     </View>
   );
 };
@@ -141,28 +197,96 @@ const AttendanceRecordsScreen = () => {
 export default AttendanceRecordsScreen;
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F7F8FA",
+    paddingHorizontal: 15,
+    paddingTop: 20,
+  },
+  inputContainer: {
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 6,
+    color: "#333",
+  },
+  pickerBox: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 8,
+  },
+  pickerItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#f2f2f2",
+    borderRadius: 8,
+    margin: 5,
+  },
+  selectedItem: {
+    backgroundColor: "#007AFF",
+  },
+  pickerText: {
+    color: "#333",
+    fontSize: 15,
+  },
+  selectedText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  dateButton: {
+    backgroundColor: "#007AFF",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  dateButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   tableHeader: {
     flexDirection: "row",
-    borderBottomWidth: 2,
-    paddingVertical: 8,
-    marginTop: 10,
-    marginBottom: 5,
-    backgroundColor: "#ddd",
+    backgroundColor: "#E6E6E6",
+    paddingVertical: 10,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
   },
-  headerText: { fontWeight: "bold", fontSize: 16, textAlign: "center" },
-  row: { flexDirection: "row", borderBottomWidth: 1, paddingVertical: 8 },
-  cell: { fontSize: 16, textAlign: "center", paddingVertical: 5 },
-  columnName: { flex: 2 },
-  columnStatus: { flex: 1 },
-  present: { color: "green", fontWeight: "bold" },
-  absent: { color: "red", fontWeight: "bold" },
-  emptyText: { textAlign: "center", fontSize: 16, color: "gray", marginTop: 20 },
-  datePickerButton: {
-    padding: 10,
-    backgroundColor: "#ddd",
-    borderRadius: 5,
-    alignItems: "center",
-    marginVertical: 10,
+  headerText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#333",
+    textAlign: "center",
   },
-  dateText: { fontSize: 16 },
+  row: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+    paddingVertical: 10,
+  },
+  cell: {
+    fontSize: 15,
+    textAlign: "center",
+    color: "#000",
+  },
+  nameColumn: { flex: 2 },
+  statusColumn: { flex: 1 },
+  timeColumn: { flex: 1 },
+  present: { color: "green", fontWeight: "600" },
+  late: { color: "orange", fontWeight: "600" },
+  absent: { color: "red", fontWeight: "600" },
+  na: { color: "gray" },
+  emptyText: {
+    textAlign: "center",
+    color: "gray",
+    marginTop: 20,
+    fontSize: 16,
+  },
 });

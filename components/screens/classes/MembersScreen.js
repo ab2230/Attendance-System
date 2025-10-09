@@ -23,7 +23,6 @@ const MembersScreen = ({ route, navigation }) => {
   const [memberIdTobeDeleted, setMemberIdTobeDeleted] = useState(null);
   const [importing, setImporting] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState(initialClassId);
-  const [filteredMembers, setFilteredMembers] = useState([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -35,9 +34,19 @@ const MembersScreen = ({ route, navigation }) => {
       duration: 500,
       useNativeDriver: true,
     }).start();
-    
-    setFilteredMembers(members.filter((m) => m.classId === selectedClassId));
-  }, [members, selectedClassId]);
+  }, []);
+
+  // Derive filtered members directly from members array
+  const filteredMembers = members.filter((m) => m.classId === selectedClassId);
+  
+  // Debug logging
+  console.log('MembersScreen Debug:', {
+    selectedClassId,
+    initialClassId,
+    totalMembers: members.length,
+    filteredMembersCount: filteredMembers.length,
+    members: members.map(m => ({ id: m.id, firstName: m.firstName, classId: m.classId }))
+  });
  // Add this function
  const handleImport = async () => {
   try {
@@ -70,19 +79,6 @@ const MembersScreen = ({ route, navigation }) => {
     setImporting(false);
   }
 };
-  const handleAddMember = () => {
-    if (firstName.trim() && lastName.trim()) {
-      addMember({ 
-        id: Date.now().toString(), 
-        firstName, 
-        lastName, 
-        classId: selectedClassId 
-      });
-      setFirstName("");
-      setLastName("");
-      setShowModal(false);
-    }
-  };
 
   const handleEditMember = (item) => {
     setEditingMember(item);
@@ -207,7 +203,6 @@ if(importing){
 
     <AddMembersModal 
       visible={showModal} 
-      handleAddMember={editingMember ? handleUpdateMember : handleAddMember} 
       classes={classes}
       firstName={firstName}
       lastName={lastName}
@@ -220,8 +215,11 @@ if(importing){
         setEditingMember(null);
         setFirstName("");
         setLastName("");
+        // Reset selectedClassId to the initial class when closing
+        setSelectedClassId(initialClassId);
       }}
       isEditing={!!editingMember}
+      editingMember={editingMember}
     />
 
     <DeleteConfirmationModal
@@ -254,7 +252,11 @@ if(importing){
     />
 
       <AddButton 
-        onClick={() => setShowModal(true)} 
+        onClick={() => {
+          // Ensure selectedClassId is set to current class when adding new member
+          setSelectedClassId(initialClassId);
+          setShowModal(true);
+        }} 
         style={styles.addButton}
       />
   </LinearGradient>

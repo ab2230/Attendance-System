@@ -4,10 +4,12 @@ import { ProgramContext } from "../../context/ProgramContext";
 import { MemberContext } from "../../context/MemberContext";
 import { ClassContext } from "../../context/ClassContext";
 import CustomDropDown from "../../common/CustomDropDown";
+import LoadingButton from "../../common/LoadingButton";
+import LoadingScreen from "../../common/LoadingScreen";
 
 const EnrollStudentsModal = ({ programId, onClose, visible }) => {
   const { members } = useContext(MemberContext);
-  const { programs, enrollStudents } = useContext(ProgramContext);
+  const { programs, enrollStudents, loading } = useContext(ProgramContext);
   const { classes } = useContext(ClassContext);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [searchText, setSearchText] = useState("");
@@ -37,14 +39,24 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
     );
   };
 
-  const handleEnrollStudents = () => {
-    enrollStudents(programId, [...enrolledStudentIds, ...selectedStudents]);
-    onClose();
+  const handleEnrollStudents = async () => {
+    try {
+      await enrollStudents(programId, [...enrolledStudentIds, ...selectedStudents]);
+      onClose();
+    } catch (error) {
+      console.error('Error enrolling selected students:', error);
+      // Error handling is managed by the context
+    }
   };
 
-  const handleEnrollAll = () => {
-    enrollStudents(programId, [...enrolledStudentIds, ...availableStudents.map((s) => s.id)]);
-    onClose();
+  const handleEnrollAll = async () => {
+    try {
+      await enrollStudents(programId, [...enrolledStudentIds, ...availableStudents.map((s) => s.id)]);
+      onClose();
+    } catch (error) {
+      console.error('Error enrolling all students:', error);
+      // Error handling is managed by the context
+    }
   };
 
   return (
@@ -76,25 +88,51 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
             style={styles.studentItem}
             onPress={() => toggleStudentSelection(item.id)}
           >
-            <Text>{item.firstName} {item.lastName}</Text>
-            {selectedStudents.includes(item.id) && <Text>✓</Text>}
+            <Text style={styles.studentName}>{item.firstName} {item.lastName}</Text>
+            {selectedStudents.includes(item.id) && <Text style={styles.checkmark}>✓</Text>}
           </TouchableOpacity>
         )}
-        ListEmptyComponent={<Text>No available students to enroll.</Text>}
+        ListEmptyComponent={<Text style={styles.emptyText}>No available students to enroll.</Text>}
       />
 
-      <TouchableOpacity style={styles.enrollButton} onPress={handleEnrollStudents}>
-        <Text style={styles.enrollButtonText}>Enroll Selected</Text>
-      </TouchableOpacity>
+      <LoadingButton
+        onPress={handleEnrollStudents}
+        loading={loading}
+        title="Enroll Selected"
+        loadingText="Enrolling..."
+        icon="adduser"
+        colors={['#162447', '#1e3a5f']}
+        style={styles.enrollButton}
+        disabled={selectedStudents.length === 0}
+      />
 
-      <TouchableOpacity style={styles.enrollAllButton} onPress={handleEnrollAll}>
-        <Text style={styles.enrollAllButtonText}>Enroll All</Text>
-      </TouchableOpacity>
+      <LoadingButton
+        onPress={handleEnrollAll}
+        loading={loading}
+        title="Enroll All"
+        loadingText="Enrolling All..."
+        icon="team"
+        colors={['#4CAF50', '#45a049']}
+        style={styles.enrollAllButton}
+        disabled={filteredStudents.length === 0}
+      />
 
-      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+      <TouchableOpacity 
+        style={[styles.closeButton, loading && styles.disabledButton]} 
+        onPress={onClose}
+        disabled={loading}
+      >
         <Text style={styles.closeButtonText}>Close</Text>
       </TouchableOpacity>
     </View>
+    
+    {loading && (
+      <LoadingScreen
+        overlay={true}
+        text="Enrolling students..."
+        size="large"
+      />
+    )}
     </Modal>
   );
 };
@@ -109,6 +147,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 10,
+    color: "#000",
   },
   searchInput: {
     borderWidth: 1,
@@ -156,6 +195,27 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: "white",
     fontSize: 16,
+  },
+  studentName: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#000",
+  },
+  checkmark: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#4CAF50",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 20,
+    fontStyle: "italic",
+  },
+  disabledButton: {
+    backgroundColor: "#ccc",
+    opacity: 0.6,
   },
 });
 

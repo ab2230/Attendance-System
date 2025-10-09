@@ -1,13 +1,21 @@
 import { StyleSheet, Text, View, Modal, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native'
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState, useContext } from 'react'
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import CustomTextInput from "../../common/CustomTextInput";
+import LoadingButton from "../../common/LoadingButton";
+import ErrorModal from "../../common/ErrorModal";
+import LoadingScreen from "../../common/LoadingScreen";
+import { ClassContext } from "../../context/ClassContext";
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 
 const { width } = Dimensions.get('window');
 
-const AddClassModal = ({className, setClassName, handleAddClass, visible, onClose, isEditing, t}) => {
+const AddClassModal = ({className, setClassName, visible, onClose, isEditing, editingClass, t}) => {
+  const { addClass, updateClass, loading } = useContext(ClassContext);
+  const [localLoading, setLocalLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const scaleValue = useRef(new Animated.Value(0)).current;
   const fadeValue = useRef(new Animated.Value(0)).current;
 
@@ -42,6 +50,42 @@ const AddClassModal = ({className, setClassName, handleAddClass, visible, onClos
       ]).start();
     }
   }, [visible]);
+
+  const handleSubmit = async () => {
+    try {
+      // Validation
+      if (!className.trim()) {
+        setError('Class name is required');
+        setShowErrorModal(true);
+        return;
+      }
+      
+      setLocalLoading(true);
+      setError(null);
+      
+      const classData = {
+        name: className.trim()
+      };
+      
+      if (isEditing && editingClass) {
+        classData.id = editingClass.id;
+        await updateClass(classData);
+      } else {
+        await addClass(classData.name);
+      }
+      
+      // Reset form
+      setClassName('');
+      onClose();
+      
+    } catch (error) {
+      console.error('Error submitting class:', error);
+      setError(error.message || 'Failed to save class. Please try again.');
+      setShowErrorModal(true);
+    } finally {
+      setLocalLoading(false);
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="none" transparent={true}>
@@ -87,30 +131,34 @@ const AddClassModal = ({className, setClassName, handleAddClass, visible, onClos
               containerStyle={styles.inputContainer}
             />
 
-            <TouchableOpacity 
-              onPress={handleAddClass} 
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
-                style={styles.button}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.buttonText}>
-                  {isEditing ? t('update') : t('add')}
-                </Text>
-                <AntDesign 
-                  name={isEditing ? "checkcircle" : "pluscircle"} 
-                  size={20} 
-                  color="white" 
-                  style={styles.buttonIcon}
-                />
-              </LinearGradient>
-            </TouchableOpacity>
+            <LoadingButton
+              onPress={handleSubmit}
+              loading={localLoading || loading}
+              title={isEditing ? (t ? t('update') : 'Update') + ' Class' : (t ? t('add') : 'Add') + ' Class'}
+              loadingText={isEditing ? 'Updating...' : 'Adding...'}
+              icon={isEditing ? "checkcircle" : "pluscircle"}
+              colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
+              style={styles.submitButton}
+            />
           </View>
         </Animated.View>
       </Animated.View>
+      
+      <ErrorModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="Error"
+        message={error}
+        onRetry={handleSubmit}
+        buttonText="Try Again"
+      />
+      
+      {(localLoading || loading) && (
+        <LoadingScreen
+          overlay={true}
+          text={isEditing ? "Updating class..." : "Adding class..."}
+        />
+      )}
     </Modal>
   )
 }
@@ -195,5 +243,8 @@ const styles = StyleSheet.create({
   },
   buttonIcon: {
     marginLeft: 10,
+  },
+  submitButton: {
+    marginTop: 10,
   },
 });

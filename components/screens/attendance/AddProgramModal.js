@@ -1,47 +1,91 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState, useContext } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing } from "react-native";
 import CustomTextInput from "../../common/CustomTextInput";
+import LoadingButton from "../../common/LoadingButton";
+import ErrorModal from "../../common/ErrorModal";
+import LoadingScreen from "../../common/LoadingScreen";
+import { ProgramContext } from "../../context/ProgramContext";
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 
 const { width } = Dimensions.get('window');
 
-const AddProgramModal = ({ programName, setProgramName, visible, onClose, onAddProgram }) => {
+const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEditing, editingProgram }) => {
+  const { addProgram, updateProgram, loading } = useContext(ProgramContext);
+  const [localLoading, setLocalLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const scaleValue = useRef(new Animated.Value(0)).current;
   const fadeValue = useRef(new Animated.Value(0)).current;
 
-   useEffect(() => {
-      if (visible) {
-        Animated.parallel([
-          Animated.timing(scaleValue, {
-            toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.back(1.5)),
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeValue, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ]).start();
-      } else {
-        Animated.parallel([
-          Animated.timing(scaleValue, {
-            toValue: 0,
-            duration: 200,
-            easing: Easing.in(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeValue, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: true,
-          })
-        ]).start();
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(scaleValue, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeValue, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleValue, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeValue, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
+  }, [visible]);
+
+  const handleSubmit = async () => {
+    try {
+      // Validation
+      if (!programName.trim()) {
+        setError('Program name is required');
+        setShowErrorModal(true);
+        return;
       }
-    }, [visible]);
+      
+      setLocalLoading(true);
+      setError(null);
+      
+      const programData = {
+        name: programName.trim()
+      };
+      
+      if (isEditing && editingProgram) {
+        programData.id = editingProgram.id;
+        await updateProgram(programData);
+      } else {
+        await addProgram(programData.name);
+      }
+      
+      // Reset form
+      setProgramName('');
+      onClose();
+      
+    } catch (error) {
+      console.error('Error submitting program:', error);
+      setError(error.message || 'Failed to save program. Please try again.');
+      setShowErrorModal(true);
+    } finally {
+      setLocalLoading(false);
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="none" transparent={true}>
@@ -67,7 +111,7 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, onAddP
             end={{ x: 1, y: 0 }}
             style={styles.modalHeader}
           >
-            <Text style={styles.title}>Create New Program</Text>
+            <Text style={styles.title}>{isEditing ? 'Update Program' : 'Create New Program'}</Text>
             <TouchableOpacity 
               onPress={onClose} 
               style={styles.closeButton}
@@ -87,28 +131,34 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, onAddP
               containerStyle={styles.inputField}
             />
 
-            <TouchableOpacity 
-              onPress={onAddProgram} 
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#43e97b', '#38f9d7']}
-                style={styles.button}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.buttonText}>Create Program</Text>
-                <AntDesign 
-                  name="pluscircle" 
-                  size={20} 
-                  color="white" 
-                  style={styles.buttonIcon}
-                />
-              </LinearGradient>
-            </TouchableOpacity>
+            <LoadingButton
+              onPress={handleSubmit}
+              loading={localLoading || loading}
+              title={isEditing ? 'Update Program' : 'Create Program'}
+              loadingText={isEditing ? 'Updating...' : 'Creating...'}
+              icon={isEditing ? "checkcircle" : "pluscircle"}
+              colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
+              style={styles.submitButton}
+            />
           </View>
         </Animated.View>
       </Animated.View>
+      
+      <ErrorModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="Error"
+        message={error}
+        onRetry={handleSubmit}
+        buttonText="Try Again"
+      />
+      
+      {(localLoading || loading) && (
+        <LoadingScreen
+          overlay={true}
+          text={isEditing ? "Updating program..." : "Creating program..."}
+        />
+      )}
     </Modal>
   );
 };
@@ -193,6 +243,9 @@ const styles = StyleSheet.create({
   },
   buttonIcon: {
     marginLeft: 10,
+  },
+  submitButton: {
+    marginTop: 10,
   },
 });
 

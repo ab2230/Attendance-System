@@ -5,6 +5,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ClassesNavigation from "./navigations/ClassesNavigation";
 import AttendanceScreen from "./screens/attendance/AttendanceScreen";
 import AttendanceRecords from "./screens/attendance/AttendanceRecords";
+import ProfileScreen from "./screens/profile/ProfileScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -28,6 +29,8 @@ function MyTabs() {
                 iconName = "history";
               } else if (route.name === "Classes") {
                 iconName = "account-group";
+              } else if (route.name === "Profile") {
+                iconName = "account-circle";
               }
 
               return <Icon name={iconName} size={size} color={color} />;
@@ -37,6 +40,7 @@ function MyTabs() {
           <Tab.Screen name="Today" component={AttendanceScreen} />
           <Tab.Screen name="History" component={AttendanceRecords} />
           <Tab.Screen name="Classes" component={ClassesNavigation} />
+          <Tab.Screen name="Profile" component={ProfileScreen} />
         </Tab.Navigator>
       </View>
     </SafeAreaView>

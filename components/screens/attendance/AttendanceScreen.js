@@ -1,4 +1,3 @@
-// AttendanceScreen.js
 import React, { useState, useContext } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, Text, ScrollView, Alert } from 'react-native';
 import TopNavigator from '../../common/TopNavigator';
@@ -17,7 +16,7 @@ import LinearGradient from 'react-native-linear-gradient';
 const AttendanceScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const { attendanceRecords, updateAttendance, deleteAttendance } = useContext(AttendanceContext);
+  const { attendanceRecords, updateAttendance, deleteAttendance, getLateStudents } = useContext(AttendanceContext);
   const { members } = useContext(MemberContext);
   const { classes } = useContext(ClassContext);
   const { programs } = useContext(ProgramContext);
@@ -60,9 +59,15 @@ const AttendanceScreen = () => {
     );
   });
 
-  const handleUpdateAttendance = (memberId, status) => {
+  const handleUpdateAttendance = (memberId, status, arrivalTime = null) => {
     const updatedMembers = selectedRecord.members.map((member) =>
-      member.memberId === memberId ? { ...member, status } : member
+      member.memberId === memberId ? { 
+        ...member, 
+        status,
+        arrivalTime: status === 'Present' ? (arrivalTime || member.arrivalTime) : null,
+        isLate: arrivalTime && selectedRecord.classStartTime ? 
+          new Date(`2000-01-01T${arrivalTime}`) > new Date(`2000-01-01T${selectedRecord.classStartTime}`) : false
+      } : member
     );
     setSelectedRecord({ ...selectedRecord, members: updatedMembers });
   };
@@ -88,6 +93,8 @@ const AttendanceScreen = () => {
       ]
     );
   };
+
+  console.log('this is attendanceRecords', attendanceRecords);
 
   return (
     <View style={styles.container}>
@@ -158,63 +165,104 @@ const AttendanceScreen = () => {
           </View>
         ) : (
           <View style={styles.listContainer}>
-            {filteredRecords.map((record) => (
-              <TouchableOpacity 
-                key={record.id} 
-                onPress={() => setSelectedRecord(record)}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={['#ffffff', '#f8f9fa']}
-                  style={styles.recordCard}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+            {filteredRecords.map((record) => {
+              const lateStudents = getLateStudents(record, record.classStartTime);
+              const presentCount = record.members.filter(m => m.status === 'Present').length;
+              const absentCount = record.members.filter(m => m.status === 'Absent').length;
+              
+              return (
+                <TouchableOpacity 
+                  key={record.id} 
+                  onPress={() => setSelectedRecord(record)}
+                  activeOpacity={0.7}
                 >
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.recordDate}>
-                      {new Date(record.date).toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteAttendance(record);
-                      }}
-                      style={styles.deleteButton}
-                    >
-                      <Icon name="delete" size={20} color="#ff6b6b" />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <View style={styles.cardBody}>
-                    <View style={styles.infoRow}>
-                      <Icon name="class" size={16} color="#6c757d" />
-                      <Text style={styles.recordText}>
-                        {getProgramName(record.programId)}
-                      </Text>
+                  <LinearGradient
+                    colors={['#ffffff', '#f8f9fa']}
+                    style={styles.recordCard}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <Text style={styles.recordDate}>
+                          {new Date(record.date).toLocaleDateString('en-US', { 
+                            weekday: 'short', 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })}
+                        </Text>
+                        {record.classStartTime && (
+                          <Text style={styles.classTime}>
+                            Class: {record.classStartTime}
+                          </Text>
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAttendance(record);
+                        }}
+                        style={styles.deleteButton}
+                      >
+                        <Icon name="delete" size={20} color="#ff6b6b" />
+                      </TouchableOpacity>
                     </View>
                     
-                    <View style={styles.statsRow}>
-                      <View style={styles.statItem}>
-                        <Icon name="check-circle" size={16} color="#43e97b" />
-                        <Text style={styles.statText}>
-                          {record.members.filter(m => m.status === 'Present').length} Present
+                    <View style={styles.cardBody}>
+                      <View style={styles.infoRow}>
+                        <Icon name="class" size={16} color="#6c757d" />
+                        <Text style={styles.recordText}>
+                          {getProgramName(record.programId)}
                         </Text>
                       </View>
-                      <View style={styles.statItem}>
-                        <Icon name="cancel" size={16} color="#ff6b6b" />
-                        <Text style={styles.statText}>
-                          {record.members.filter(m => m.status === 'Absent').length} Absent
-                        </Text>
+                      
+                      <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                          <Icon name="check-circle" size={16} color="#43e97b" />
+                          <Text style={styles.statText}>
+                            {presentCount} Present
+                          </Text>
+                        </View>
+                        <View style={styles.statItem}>
+                          <Icon name="cancel" size={16} color="#ff6b6b" />
+                          <Text style={styles.statText}>
+                            {absentCount} Absent
+                          </Text>
+                        </View>
+                        {lateStudents.length > 0 && (
+                          <View style={styles.statItem}>
+                            <Icon name="schedule" size={16} color="#ffa726" />
+                            <Text style={[styles.statText, styles.lateText]}>
+                              {lateStudents.length} Late
+                            </Text>
+                          </View>
+                        )}
                       </View>
+
+                      {/* Late Students Details */}
+                      {lateStudents.length > 0 && (
+                        <View style={styles.lateStudentsContainer}>
+                          <Text style={styles.lateStudentsTitle}>Late Arrivals:</Text>
+                          <View style={styles.lateStudentsList}>
+                            {lateStudents.slice(0, 3).map((student, index) => (
+                              <Text key={student.memberId} style={styles.lateStudentName}>
+                                {getMemberName(student.memberId)} ({student.arrivalTime})
+                                {index < Math.min(lateStudents.length, 3) - 1 && ', '}
+                              </Text>
+                            ))}
+                            {lateStudents.length > 3 && (
+                              <Text style={styles.moreStudents}>
+                                +{lateStudents.length - 3} more
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -313,10 +361,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  headerLeft: {
+    flex: 1,
+  },
   recordDate: {
     fontSize: 16,
     fontWeight: '600',
     color: '#343a40',
+  },
+  classTime: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginTop: 2,
   },
   deleteButton: {
     padding: 6,
@@ -337,17 +393,53 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     marginTop: 8,
+    flexWrap: 'wrap',
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 16,
+    marginBottom: 4,
   },
   statText: {
     fontSize: 14,
     color: '#6c757d',
     marginLeft: 4,
   },
+  lateText: {
+    color: '#ffa726',
+    fontWeight: '500',
+  },
+  lateStudentsContainer: {
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: '#fff3e0',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ffa726',
+  },
+  lateStudentsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#e65100',
+    marginBottom: 4,
+  },
+  lateStudentsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  lateStudentName: {
+    fontSize: 12,
+    color: '#bf360c',
+  },
+  moreStudents: {
+    fontSize: 12,
+    color: '#bf360c',
+    fontStyle: 'italic',
+  },
 });
 
 export default AttendanceScreen;
+
+
