@@ -1,5 +1,5 @@
 import XLSX from 'xlsx';
-import { pick, keepLocalCopy } from '@react-native-documents/picker'
+import { pick } from '@react-native-documents/picker'
 import { readFile } from 'react-native-fs';
 
 export const importStudents = async (selectedClassId, addMember) => {
@@ -27,7 +27,12 @@ export const importStudents = async (selectedClassId, addMember) => {
     
   } catch (err) {
     console.log('error in importStudents', err);
-    if (DocumentPicker.isCancel(err)) {
+    // Treat typical cancel cases as a non-error result
+    if (
+      err?.code === 'DOCUMENT_PICKER_CANCELED' ||
+      err?.code === 'DOCUMENT_PICKER_CANCELLED' ||
+      /cancel(l)?ed/i.test(err?.message || '')
+    ) {
       return null;
     }
     throw err;

@@ -13,6 +13,7 @@ import { importStudents } from "../../utils/importStudents";
 import LoadingScreen from "../../common/LoadingScreen";
 import EmptyState from "../../common/EmptyState";
 import DeleteConfirmationModal from "../../common/DeleteConfirmationModal";
+import ImportGuideModal from "../../common/ImportGuideModal";
 
 const MembersScreen = ({ route, navigation }) => {
   const { classId: initialClassId } = route.params;
@@ -27,6 +28,7 @@ const MembersScreen = ({ route, navigation }) => {
   const [lastName, setLastName] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [showImportGuide, setShowImportGuide] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -47,38 +49,44 @@ const MembersScreen = ({ route, navigation }) => {
     filteredMembersCount: filteredMembers.length,
     members: members.map(m => ({ id: m.id, firstName: m.firstName, classId: m.classId }))
   });
- // Add this function
- const handleImport = async () => {
-  try {
-    setImporting(true);
-    const newMembers = await importStudents(selectedClassId, addMember);
-    console.log('this is the new members', newMembers);
-    if (newMembers === null) return; // User cancelled
-    if (newMembers.length > 0) {
-      const status = await importMembers(newMembers);
-      console.log('this is the status', status);
-      Alert.alert(
-        "Import Successful",
-        `Imported ${newMembers.length} students.`,
-        [{ text: "OK" }]
-      );
-    } else {
-      Alert.alert(
-        "No Valid Data",
-        "No valid student records found in the file.",
-        [{ text: "OK" }]
-      );
-    }
-  } catch (error) {
-    Alert.alert(
-      "Import Failed",
-      error.message || "Failed to import students",
-      [{ text: "OK" }]
-    );
-  } finally {
-    setImporting(false);
-  }
-};
+ // Show guidance first
+ const handleImport = () => {
+   setShowImportGuide(true);
+ };
+
+ // Proceed with picking and importing after user sees the guide
+ const proceedImport = async () => {
+   try {
+     setShowImportGuide(false);
+     setImporting(true);
+     const newMembers = await importStudents(selectedClassId, addMember);
+     console.log('this is the new members', newMembers);
+     if (newMembers === null) return; // User cancelled
+     if (newMembers.length > 0) {
+       const status = await importMembers(newMembers);
+       console.log('this is the status', status);
+       Alert.alert(
+         "Import Successful",
+         `Imported ${newMembers.length} students.`,
+         [{ text: "OK" }]
+       );
+     } else {
+       Alert.alert(
+         "No Valid Data",
+         "No valid student records found in the file.",
+         [{ text: "OK" }]
+       );
+     }
+   } catch (error) {
+     Alert.alert(
+       "Import Failed",
+       error.message || "Failed to import students",
+       [{ text: "OK" }]
+     );
+   } finally {
+     setImporting(false);
+   }
+ };
 
   const handleEditMember = (item) => {
     setEditingMember(item);
@@ -181,6 +189,11 @@ if(importing){
     uploadTrue={true} 
     handleImport={handleImport}
     importing={importing}/>
+    <ImportGuideModal
+      visible={showImportGuide}
+      onClose={() => setShowImportGuide(false)}
+      onProceed={proceedImport}
+    />
     {
       filteredMembers.length === 0 ? <View style={{flex:1}}><EmptyState 
       icon="account-remove" 
