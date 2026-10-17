@@ -10,6 +10,7 @@ const SignupScreen = ({ navigation }) => {
   const { signUp, loading } = useContext(AuthContext);
 
   const handleSignup = async () => {
+    if (loading) return;
     if (!email || !password || !firstName || !lastName) {
       Alert.alert('Error', 'Please fill all fields');
       return;

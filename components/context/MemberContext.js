@@ -1,11 +1,12 @@
 import React, { createContext, useState, useEffect } from "react";
 import supabaseService from "../../services/supabaseService";
+import { DEFAULT_MEMBER_TYPE, normalizeMemberType } from "../constants/memberTypes";
 
 export const MemberContext = createContext();
 
 export const MemberProvider = ({ children }) => {
   const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export const MemberProvider = ({ children }) => {
         lastName: member.last_name,
         classId: member.class_id,
         className: member.class_name,
+        type: normalizeMemberType(member.type) || DEFAULT_MEMBER_TYPE,
         created_at: member.created_at,
         updated_at: member.updated_at
       }));
@@ -43,12 +45,14 @@ export const MemberProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
+      const type = normalizeMemberType(newMember.type) || DEFAULT_MEMBER_TYPE;
       await supabaseService.addMember(
         newMember.firstName, 
         newMember.lastName, 
-        newMember.classId
+        newMember.classId,
+        type
       );
-      await loadMembers(); // Reload to get updated data
+      await loadMembers();
     } catch (error) {
       console.error("Error adding member:", error);
       setError(error.message);
@@ -63,16 +67,17 @@ export const MemberProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      // Add members one by one
       for (const member of newMembers) {
+        const type = normalizeMemberType(member.type) || DEFAULT_MEMBER_TYPE;
         await supabaseService.addMember(
           member.firstName, 
           member.lastName, 
-          member.classId
+          member.classId,
+          type
         );
       }
       
-      await loadMembers(); // Reload to get updated data
+      await loadMembers();
       return true;
     } catch (error) {
       console.error("Error importing members:", error);
@@ -88,12 +93,14 @@ export const MemberProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
+      const type = normalizeMemberType(updatedMember.type) || DEFAULT_MEMBER_TYPE;
       await supabaseService.updateMember(updatedMember.id, {
         firstName: updatedMember.firstName,
         lastName: updatedMember.lastName,
-        classId: updatedMember.classId
+        classId: updatedMember.classId,
+        type,
       });
-      await loadMembers(); // Reload to get updated data
+      await loadMembers();
     } catch (error) {
       console.error("Error updating member:", error);
       setError(error.message);
@@ -109,7 +116,7 @@ export const MemberProvider = ({ children }) => {
       setError(null);
       
       await supabaseService.deleteMember(id);
-      await loadMembers(); // Reload to get updated data
+      await loadMembers();
     } catch (error) {
       console.error("Error deleting member:", error);
       setError(error.message);

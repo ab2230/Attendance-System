@@ -5,13 +5,23 @@ import LoadingButton from "../../common/LoadingButton";
 import ErrorModal from "../../common/ErrorModal";
 import LoadingScreen from "../../common/LoadingScreen";
 import { ProgramContext } from "../../context/ProgramContext";
+import { DEFAULT_MAX_LATE_MINUTES } from "../../utils/attendanceEditWindow";
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 
 const { width } = Dimensions.get('window');
 
-const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEditing, editingProgram }) => {
+const AddProgramModal = ({
+  programName,
+  setProgramName,
+  visible,
+  onClose,
+  isEditing,
+  editingProgram,
+  maxLateMinutes,
+  setMaxLateMinutes,
+}) => {
   const { addProgram, updateProgram, loading } = useContext(ProgramContext);
   const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -21,6 +31,14 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEdit
 
   useEffect(() => {
     if (visible) {
+      if (isEditing && editingProgram) {
+        setMaxLateMinutes?.(
+          String(editingProgram.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES)
+        );
+      } else if (!maxLateMinutes) {
+        setMaxLateMinutes?.(String(DEFAULT_MAX_LATE_MINUTES));
+      }
+
       Animated.parallel([
         Animated.timing(scaleValue, {
           toValue: 1,
@@ -52,10 +70,18 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEdit
   }, [visible]);
 
   const handleSubmit = async () => {
+    if (localLoading || loading) return;
+
     try {
-      // Validation
       if (!programName.trim()) {
         setError('Program name is required');
+        setShowErrorModal(true);
+        return;
+      }
+
+      const lateMinutes = parseInt(String(maxLateMinutes).trim(), 10);
+      if (!Number.isFinite(lateMinutes) || lateMinutes <= 0) {
+        setError('Maximum late minutes must be a positive number (e.g. 60)');
         setShowErrorModal(true);
         return;
       }
@@ -64,18 +90,19 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEdit
       setError(null);
       
       const programData = {
-        name: programName.trim()
+        name: programName.trim(),
+        maxLateMinutes: lateMinutes,
       };
       
       if (isEditing && editingProgram) {
         programData.id = editingProgram.id;
         await updateProgram(programData);
       } else {
-        await addProgram(programData.name);
+        await addProgram(programData);
       }
       
-      // Reset form
       setProgramName('');
+      setMaxLateMinutes?.(String(DEFAULT_MAX_LATE_MINUTES));
       onClose();
       
     } catch (error) {
@@ -104,7 +131,6 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEdit
             opacity: fadeValue
           }
         ]}>
-          {/* Header with gradient */}
           <LinearGradient
             colors={['#667eea', '#764ba2']}
             start={{ x: 0, y: 0 }}
@@ -121,7 +147,6 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEdit
             </TouchableOpacity>
           </LinearGradient>
 
-          {/* Modal Content */}
           <View style={styles.modalContent}>
             <CustomTextInput 
               label="Program Name"
@@ -130,6 +155,18 @@ const AddProgramModal = ({ programName, setProgramName, visible, onClose, isEdit
               setInput={(value) => setProgramName(value)}
               containerStyle={styles.inputField}
             />
+
+            <CustomTextInput 
+              label="Maximum Late Minutes"
+              input={String(maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES)}
+              placeholder="Eg: 60"
+              setInput={(value) => setMaxLateMinutes?.(value.replace(/[^0-9]/g, ''))}
+              keyboardType="numeric"
+              containerStyle={styles.inputField}
+            />
+            <Text style={styles.helperText}>
+              Attendance stays editable until class start time plus this many minutes. After that, edits are locked.
+            </Text>
 
             <LoadingButton
               onPress={handleSubmit}
@@ -218,31 +255,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   inputField: {
-    marginBottom: 25,
+    marginBottom: 12,
   },
-  button: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.27,
-    shadowRadius: 4.65,
-    elevation: 6,
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-  buttonIcon: {
-    marginLeft: 10,
+  helperText: {
+    fontSize: 13,
+    color: '#6c757d',
+    lineHeight: 18,
+    marginBottom: 20,
   },
   submitButton: {
     marginTop: 10,

@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, ScrollView, Alert, RefreshControl } from 'react-native';
 import TopNavigator from '../../common/TopNavigator';
 import AttendanceModal from './AttendanceModal';
 import EditAttendanceModal from './EditAttendanceModal';
@@ -12,19 +12,37 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import CustomDropDown from '../../common/CustomDropDown';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import LinearGradient from 'react-native-linear-gradient';
+import LoadingScreen from '../../common/LoadingScreen';
+import { MEMBER_TYPE_OPTIONS } from '../../constants/memberTypes';
+import {
+  isAttendanceEditable,
+  getEditWindowMessage,
+  getAttendanceEditDeadline,
+  DEFAULT_MAX_LATE_MINUTES,
+} from '../../utils/attendanceEditWindow';
+import { bumpProgramMemberOrder } from '../../utils/attendanceMemberOrder';
+
+const TYPE_FILTER_OPTIONS = [
+  { id: 'all', name: 'All Types' },
+  ...MEMBER_TYPE_OPTIONS,
+];
 
 const AttendanceScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const { attendanceRecords, updateAttendance, deleteAttendance, getLateStudents } = useContext(AttendanceContext);
-  const { members } = useContext(MemberContext);
+  const { attendanceRecords, updateAttendance, deleteAttendance, getLateStudents, loadAttendanceRecords, loading } = useContext(AttendanceContext);
+  const { members, loadMembers } = useContext(MemberContext);
   const { classes } = useContext(ClassContext);
-  const { programs } = useContext(ProgramContext);
+  const { programs, loadPrograms } = useContext(ProgramContext);
 
   const [filterProgram, setFilterProgram] = useState("");
   const [filterMember, setFilterMember] = useState("");
+  const [filterMemberType, setFilterMemberType] = useState('all');
   const [filterDate, setFilterDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const getClassName = (classId) => {
     const classObj = classes.find((cls) => cls.id === classId);
@@ -51,33 +69,125 @@ const AttendanceScreen = () => {
   ];
 
   const filteredRecords = attendanceRecords.filter((record) => {
-    return (
-      (filterProgram === "" || record.programId === filterProgram) &&
-      (filterMember === 0 || filterMember === "" || 
-        record.members.some((member) => member.memberId === filterMember)) &&
-      (filterDate === null || new Date(record.date).toDateString() === filterDate.toDateString())
-    );
+    const matchesProgram = filterProgram === "" || record.programId === filterProgram;
+    const matchesMember =
+      filterMember === 0 ||
+      filterMember === "" ||
+      record.members.some((member) => member.memberId === filterMember);
+    const matchesDate =
+      filterDate === null ||
+      new Date(record.date).toDateString() === filterDate.toDateString();
+    const matchesType =
+      filterMemberType === 'all' ||
+      record.members.some((entry) => {
+        const member = members.find((m) => m.id === entry.memberId);
+        return member?.type === filterMemberType;
+      });
+
+    return matchesProgram && matchesMember && matchesDate && matchesType;
   });
 
+  const buildEditableRecord = (record) => {
+    const program = programs.find((p) => p.id === record.programId);
+    const enrolledIds = program?.enrolledStudents || [];
+    const existingById = new Map(record.members.map((m) => [m.memberId, m]));
+
+    const mergedMembers = enrolledIds.map((id) => {
+      if (existingById.has(id)) return existingById.get(id);
+      const member = members.find((m) => m.id === id);
+      return {
+        memberId: id,
+        firstName: member?.firstName || '',
+        lastName: member?.lastName || '',
+        status: 'Absent',
+        classId: member?.classId,
+        arrivalTime: null,
+        isLate: false,
+      };
+    });
+
+    // Keep anyone already on the record who is no longer enrolled
+    record.members.forEach((entry) => {
+      if (!enrolledIds.includes(entry.memberId)) {
+        mergedMembers.push(entry);
+      }
+    });
+
+    return {
+      ...record,
+      maxLateMinutes: record.maxLateMinutes ?? program?.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES,
+      members: mergedMembers,
+    };
+  };
+
+  const openRecordForEdit = (record) => {
+    if (!isAttendanceEditable(record)) {
+      Alert.alert('Editing locked', getEditWindowMessage(record));
+      return;
+    }
+    setSelectedRecord(buildEditableRecord(record));
+  };
+
   const handleUpdateAttendance = (memberId, status, arrivalTime = null) => {
+    if (!selectedRecord) return;
+    if (!isAttendanceEditable(selectedRecord)) {
+      Alert.alert('Editing locked', getEditWindowMessage(selectedRecord));
+      setSelectedRecord(null);
+      return;
+    }
+
     const updatedMembers = selectedRecord.members.map((member) =>
       member.memberId === memberId ? { 
         ...member, 
         status,
-        arrivalTime: status === 'Present' ? (arrivalTime || member.arrivalTime) : null,
-        isLate: arrivalTime && selectedRecord.classStartTime ? 
-          new Date(`2000-01-01T${arrivalTime}`) > new Date(`2000-01-01T${selectedRecord.classStartTime}`) : false
+        arrivalTime: status === 'Present' ? (arrivalTime || member.arrivalTime || new Date().toTimeString().slice(0, 5)) : null,
+        isLate: (() => {
+          const time = status === 'Present'
+            ? (arrivalTime || member.arrivalTime || new Date().toTimeString().slice(0, 5))
+            : null;
+          if (!time || !selectedRecord.classStartTime) return false;
+          return new Date(`2000-01-01T${time}`) > new Date(`2000-01-01T${selectedRecord.classStartTime}`);
+        })(),
       } : member
     );
     setSelectedRecord({ ...selectedRecord, members: updatedMembers });
   };
 
-  const handleSaveUpdatedAttendance = () => {
-    updateAttendance(selectedRecord);
-    setSelectedRecord(null);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadAttendanceRecords(), loadMembers(), loadPrograms()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleSaveUpdatedAttendance = async () => {
+    if (saving || !selectedRecord) return;
+    if (!isAttendanceEditable(selectedRecord)) {
+      Alert.alert('Editing locked', getEditWindowMessage(selectedRecord));
+      setSelectedRecord(null);
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateAttendance(selectedRecord);
+      const markedOrder = (selectedRecord.members || [])
+        .filter((m) => m.status === 'Present')
+        .map((m) => m.memberId);
+      if (markedOrder.length) {
+        await bumpProgramMemberOrder(selectedRecord.programId, markedOrder);
+      }
+      setSelectedRecord(null);
+    } catch (error) {
+      Alert.alert("Error", error.message || "Failed to update attendance");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteAttendance = (record) => {
+    if (deleting) return;
     Alert.alert(
       "Delete Attendance",
       "Are you sure you want to delete this attendance record?",
@@ -85,20 +195,46 @@ const AttendanceScreen = () => {
         { text: "Cancel", style: "cancel" },
         { 
           text: "Delete", 
-          onPress: () => {
-            deleteAttendance(record);
-            setSelectedRecord(null);
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await deleteAttendance(record);
+              setSelectedRecord(null);
+            } catch (error) {
+              Alert.alert("Error", error.message || "Failed to delete attendance");
+            } finally {
+              setDeleting(false);
+            }
           } 
         },
       ]
     );
   };
 
-  console.log('this is attendanceRecords', attendanceRecords);
+  if (loading && attendanceRecords.length === 0) {
+    return (
+      <View style={styles.container}>
+        <TopNavigator title="Attendance Records" />
+        <LoadingScreen
+          text="Loading attendance..."
+          backgroundColor="#f8f9fa"
+          color="#4da0b0"
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <TopNavigator title="Attendance Records" />
+
+      {deleting && (
+        <LoadingScreen
+          overlay={true}
+          text="Deleting attendance..."
+          color="#4da0b0"
+        />
+      )}
       
       {/* Filters Section */}
       <LinearGradient 
@@ -120,6 +256,14 @@ const AttendanceScreen = () => {
           data={membersDropdown}
           currentSelected={membersDropdown.find((mem) => mem.id === filterMember)}
           setSelected={(input) => setFilterMember(input.id)}
+          containerStyle={styles.dropdown}
+        />
+
+        <CustomDropDown
+          label="Filter by Type"
+          data={TYPE_FILTER_OPTIONS}
+          currentSelected={TYPE_FILTER_OPTIONS.find((option) => option.id === filterMemberType)}
+          setSelected={(input) => setFilterMemberType(input.id)}
           containerStyle={styles.dropdown}
         />
         
@@ -156,7 +300,12 @@ const AttendanceScreen = () => {
       )}
 
       {/* Attendance Records List */}
-      <ScrollView style={styles.scrollContainer}>
+      <ScrollView
+        style={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+        }
+      >
         {filteredRecords.length === 0 ? (
           <View style={styles.emptyState}>
             <Icon name="event-note" size={50} color="#adb5bd" />
@@ -169,11 +318,17 @@ const AttendanceScreen = () => {
               const lateStudents = getLateStudents(record, record.classStartTime);
               const presentCount = record.members.filter(m => m.status === 'Present').length;
               const absentCount = record.members.filter(m => m.status === 'Absent').length;
+              const editable = isAttendanceEditable(record);
+              const deadline = getAttendanceEditDeadline(
+                record.date,
+                record.classStartTime,
+                record.maxLateMinutes
+              );
               
               return (
                 <TouchableOpacity 
                   key={record.id} 
-                  onPress={() => setSelectedRecord(record)}
+                  onPress={() => openRecordForEdit(record)}
                   activeOpacity={0.7}
                 >
                   <LinearGradient
@@ -196,6 +351,11 @@ const AttendanceScreen = () => {
                             Class: {record.classStartTime}
                           </Text>
                         )}
+                        <Text style={[styles.editWindowText, !editable && styles.editLockedText]}>
+                          {editable
+                            ? `Editable until ${deadline ? deadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}`
+                            : 'Editing locked'}
+                        </Text>
                       </View>
                       <TouchableOpacity
                         onPress={(e) => {
@@ -203,8 +363,9 @@ const AttendanceScreen = () => {
                           handleDeleteAttendance(record);
                         }}
                         style={styles.deleteButton}
+                        disabled={deleting}
                       >
-                        <Icon name="delete" size={20} color="#ff6b6b" />
+                        <Icon name="delete" size={20} color={deleting ? '#ffc9c9' : '#ff6b6b'} />
                       </TouchableOpacity>
                     </View>
                     
@@ -270,12 +431,16 @@ const AttendanceScreen = () => {
       {/* Modals */}
       <EditAttendanceModal
         visible={!!selectedRecord}
-        onClose={() => setSelectedRecord(null)}
+        onClose={() => {
+          if (saving) return;
+          setSelectedRecord(null);
+        }}
         selectedRecord={selectedRecord}
         members={members}
         programs={programs}
         handleUpdateAttendance={handleUpdateAttendance}
         handleSaveUpdatedAttendance={handleSaveUpdatedAttendance}
+        saving={saving}
       />
       
       <AttendanceModal 
@@ -373,6 +538,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6c757d',
     marginTop: 2,
+  },
+  editWindowText: {
+    fontSize: 11,
+    color: '#4da0b0',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  editLockedText: {
+    color: '#adb5bd',
   },
   deleteButton: {
     padding: 6,

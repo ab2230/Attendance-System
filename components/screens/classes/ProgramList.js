@@ -1,5 +1,5 @@
 import React, { useState, useContext, useRef, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Animated, RefreshControl, ScrollView } from "react-native";
 import { SwipeListView } from "react-native-swipe-list-view";
 import { Card } from "react-native-paper";
 import AddButton from '../../common/addButton';
@@ -10,16 +10,21 @@ import LinearGradient from 'react-native-linear-gradient';
 import { MemberContext } from "../../context/MemberContext";
 import EmptyState from "../../common/EmptyState";
 import DeleteConfirmationModal from "../../common/DeleteConfirmationModal";
+import LoadingScreen from "../../common/LoadingScreen";
+import { DEFAULT_MAX_LATE_MINUTES } from "../../utils/attendanceEditWindow";
 
 const ProgramList = ({navigation}) => {
-  const { programs, addProgram, updateProgram, deleteProgram } = useContext(ProgramContext);
-  const { members } = useContext(MemberContext);
+  const { programs, deleteProgram, loadPrograms, loading } = useContext(ProgramContext);
+  const { members, loadMembers } = useContext(MemberContext);
 
-    const [confirmationModal, setConfirmationModal] = useState(false);
-   const [programIdTobeDeleted, setProgramIdTobeDeleted] = useState(null);
+  const [confirmationModal, setConfirmationModal] = useState(false);
+  const [programIdTobeDeleted, setProgramIdTobeDeleted] = useState(null);
   const [programName, setProgramName] = useState('');
+  const [maxLateMinutes, setMaxLateMinutes] = useState(String(DEFAULT_MAX_LATE_MINUTES));
   const [showModal, setShowModal] = useState(false);
   const [editingProgram, setEditingProgram] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -30,38 +35,42 @@ const ProgramList = ({navigation}) => {
     }).start();
   }, []);
 
-  const handleAddProgram = () => {
-    const newProgram = {
-      id: Date.now().toString(),
-      name: programName,
-      enrolledStudents: [],
-    };
-    addProgram(newProgram);
-    setProgramName('');
-    setShowModal(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadPrograms(), loadMembers()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleEditProgram = (item) => {
     setEditingProgram(item);
     setProgramName(item.name);
+    setMaxLateMinutes(String(item.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES));
     setShowModal(true);
-  };
-
-  const handleUpdateProgram = () => {
-    if (programName.trim().length > 0 && editingProgram) {
-      updateProgram({ ...editingProgram, name: programName });
-      setProgramName("");
-      setShowModal(false);
-      setEditingProgram(null);
-    }
   };
 
   const handleDeleteProgram = (id) => {
     setProgramIdTobeDeleted(id);
-   setConfirmationModal(true);
+    setConfirmationModal(true);
   };
 
-  const renderHiddenItem = (data, rowMap) => (
+  const confirmDeleteProgram = async () => {
+    if (deleting || !programIdTobeDeleted) return;
+    setDeleting(true);
+    try {
+      await deleteProgram(programIdTobeDeleted);
+      setProgramIdTobeDeleted(null);
+      setConfirmationModal(false);
+    } catch (error) {
+      console.error("Error deleting program:", error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const renderHiddenItem = (data) => (
     <View style={styles.rowBack}>
       <TouchableOpacity
         style={[styles.backLeftBtn, styles.backLeftBtnLeft]}
@@ -113,7 +122,12 @@ const ProgramList = ({navigation}) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.cardText}>{item.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardText}>{item.name}</Text>
+                <Text style={styles.lateWindowText}>
+                  Edit window: {item.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES} min
+                </Text>
+              </View>
               <View style={styles.memberCount}>
                 <Icon name="people" size={18} color="#6c757d" />
                 <Text style={styles.memberCountText}>{memberCount}</Text>
@@ -125,6 +139,20 @@ const ProgramList = ({navigation}) => {
     );
   };
 
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+  );
+
+  if (loading && programs.length === 0) {
+    return (
+      <LoadingScreen
+        text="Loading programs..."
+        backgroundColor="#f8f9fa"
+        color="#4da0b0"
+      />
+    );
+  }
+
   return (
     <LinearGradient 
       colors={['#f8f9fa', '#e9ecef']} 
@@ -132,14 +160,19 @@ const ProgramList = ({navigation}) => {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      {
-        programs.length === 0? <View style={{flex:1}}>
+      {programs.length === 0 ? (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={refreshControl}
+        >
           <EmptyState
             icon="bookshelf" 
             title="No Programs Available" 
             message="You haven't added any programs. Start by creating one now." 
           />
-          </View>:<SwipeListView
+        </ScrollView>
+      ) : (
+        <SwipeListView
           data={programs}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
@@ -150,53 +183,47 @@ const ProgramList = ({navigation}) => {
           disableRightSwipe={false}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          refreshControl={refreshControl}
         />
-       
-      }
-   
+      )}
 
       <AddProgramModal
         visible={showModal}
         programName={programName}
         setProgramName={setProgramName}
+        maxLateMinutes={maxLateMinutes}
+        setMaxLateMinutes={setMaxLateMinutes}
         onClose={() => {
           setShowModal(false);
           setEditingProgram(null);
           setProgramName("");
+          setMaxLateMinutes(String(DEFAULT_MAX_LATE_MINUTES));
         }}
-        onAddProgram={editingProgram ? handleUpdateProgram : handleAddProgram}
+        isEditing={!!editingProgram}
+        editingProgram={editingProgram}
       />
 
       <DeleteConfirmationModal
         visible={confirmationModal}
-        onClose={() => 
-        {setProgramIdTobeDeleted(null);
-          Animated.spring(fadeAnim, {
-            toValue: 1,
-            friction: 3,
-            useNativeDriver: true,
-          }).start();
-
-          setConfirmationModal(false)
-        }}
-        onConfirm={() => {
-          deleteProgram(programIdTobeDeleted);
+        loading={deleting}
+        onClose={() => {
+          if (deleting) return;
           setProgramIdTobeDeleted(null);
-          Animated.spring(fadeAnim, {
-            toValue: 1,
-            friction: 3,
-            useNativeDriver: true,
-          }).start();
-          setConfirmationModal(false)
-          console.log("Program Deleted!")
+          setConfirmationModal(false);
         }}
+        onConfirm={confirmDeleteProgram}
         title="Delete Program?"
         message="Deleting this program will remove all related data. Proceed?"
         icon="bookshelf"
       />
 
       <AddButton 
-        onClick={() => setShowModal(true)} 
+        onClick={() => {
+          setEditingProgram(null);
+          setProgramName('');
+          setMaxLateMinutes(String(DEFAULT_MAX_LATE_MINUTES));
+          setShowModal(true);
+        }} 
         style={styles.addButton}
       />
     </LinearGradient>
@@ -224,6 +251,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#343a40',
     letterSpacing: 0.5,
+  },
+  lateWindowText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginTop: 4,
   },
   memberCount: {
     flexDirection: 'row',

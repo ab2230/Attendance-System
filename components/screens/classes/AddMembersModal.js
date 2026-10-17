@@ -6,13 +6,28 @@ import LoadingButton from "../../common/LoadingButton";
 import ErrorModal from "../../common/ErrorModal";
 import LoadingScreen from "../../common/LoadingScreen";
 import { MemberContext } from "../../context/MemberContext";
+import { MEMBER_TYPE_OPTIONS, DEFAULT_MEMBER_TYPE } from "../../constants/memberTypes";
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 
 const { width } = Dimensions.get('window');
 
-const AddMembersModal = ({visible, classes, firstName, lastName, selectedClassId, setSelectedClassId, setFirstName, setLastName, onClose, isEditing, editingMember }) => {
+const AddMembersModal = ({
+  visible,
+  classes,
+  firstName,
+  lastName,
+  selectedClassId,
+  setSelectedClassId,
+  setFirstName,
+  setLastName,
+  memberType,
+  setMemberType,
+  onClose,
+  isEditing,
+  editingMember,
+}) => {
   const { addMember, updateMember, loading } = useContext(MemberContext);
   const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -53,6 +68,8 @@ const AddMembersModal = ({visible, classes, firstName, lastName, selectedClassId
   }, [visible]);
 
   const handleSubmit = async () => {
+    if (localLoading || loading) return;
+
     try {
       // Validation
       if (!firstName.trim()) {
@@ -72,6 +89,12 @@ const AddMembersModal = ({visible, classes, firstName, lastName, selectedClassId
         setShowErrorModal(true);
         return;
       }
+
+      if (!memberType) {
+        setError('Please select a member type');
+        setShowErrorModal(true);
+        return;
+      }
       
       setLocalLoading(true);
       setError(null);
@@ -79,7 +102,8 @@ const AddMembersModal = ({visible, classes, firstName, lastName, selectedClassId
       const memberData = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        classId: selectedClassId
+        classId: selectedClassId,
+        type: memberType,
       };
       
       if (isEditing && editingMember) {
@@ -92,6 +116,7 @@ const AddMembersModal = ({visible, classes, firstName, lastName, selectedClassId
       // Reset form
       setFirstName('');
       setLastName('');
+      setMemberType(DEFAULT_MEMBER_TYPE);
       setSelectedClassId(null);
       onClose();
       
@@ -174,6 +199,17 @@ const AddMembersModal = ({visible, classes, firstName, lastName, selectedClassId
               setInput={(value) => setLastName(value)}
               containerStyle={styles.inputField}
             />
+
+            <View style={styles.dropdownContainer}>
+              <CustomDropDown
+                label="Member Type"
+                data={MEMBER_TYPE_OPTIONS}
+                currentSelected={MEMBER_TYPE_OPTIONS.find((option) => option.id === memberType)}
+                setSelected={(input) => setMemberType(input.id)}
+                required={true}
+                containerStyle={styles.dropdownStyle}
+              />
+            </View>
 
             <LoadingButton
               onPress={handleSubmit}

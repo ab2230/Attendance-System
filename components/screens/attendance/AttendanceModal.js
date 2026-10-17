@@ -1,23 +1,34 @@
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, Modal, Alert, Animated, Dimensions, Easing, ScrollView } from 'react-native';
-import React, { useState, useContext, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, Modal, Animated, Dimensions, Easing, TextInput } from 'react-native';
+import React, { useState, useContext, useEffect, useRef, useMemo } from 'react';
 import { MemberContext } from '../../context/MemberContext';
 import { ProgramContext } from '../../context/ProgramContext';
 import { AttendanceContext } from '../../context/AttendanceContext';
 import CustomDropDown from '../../common/CustomDropDown';
 import AddProgramModal from './AddProgramModal';
-import LoadingButton from '../../common/LoadingButton';
 import ErrorModal from '../../common/ErrorModal';
 import LoadingScreen from '../../common/LoadingScreen';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MEMBER_TYPE_OPTIONS } from '../../constants/memberTypes';
+import { DEFAULT_MAX_LATE_MINUTES } from '../../utils/attendanceEditWindow';
+import {
+  getProgramMemberOrder,
+  bumpProgramMemberOrder,
+  sortMembersByProgramOrder,
+} from '../../utils/attendanceMemberOrder';
 
 const { width } = Dimensions.get('window');
 
+const TYPE_FILTER_OPTIONS = [
+  { id: 'all', name: 'All Types' },
+  ...MEMBER_TYPE_OPTIONS,
+];
+
 const AttendanceModal = ({ visible, onClose }) => {
   const { members, loading: membersLoading } = useContext(MemberContext);
-  const { programs, addProgram, loading: programsLoading } = useContext(ProgramContext);
+  const { programs, loading: programsLoading } = useContext(ProgramContext);
   const { markAttendance: saveAttendanceRecord, loading: attendanceLoading } = useContext(AttendanceContext);
   
   const [localLoading, setLocalLoading] = useState(false);
@@ -25,11 +36,16 @@ const AttendanceModal = ({ visible, onClose }) => {
   const [showErrorModal, setShowErrorModal] = useState(false);
 
   const [selectedProgramId, setSelectedProgramId] = useState(null);
+  const [filterMemberType, setFilterMemberType] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [filteredMembers, setFilteredMembers] = useState([]);
+  const [memberOrderIds, setMemberOrderIds] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [programModal, setProgramModal] = useState(false);
   const [programName, setProgramName] = useState('');
+  const [programMaxLateMinutes, setProgramMaxLateMinutes] = useState(String(DEFAULT_MAX_LATE_MINUTES));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedMemberForTime, setSelectedMemberForTime] = useState(null);
@@ -38,6 +54,7 @@ const AttendanceModal = ({ visible, onClose }) => {
   
   const scaleValue = useRef(new Animated.Value(0)).current;
   const fadeValue = useRef(new Animated.Value(0)).current;
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     if (visible) {
@@ -72,41 +89,63 @@ const AttendanceModal = ({ visible, onClose }) => {
   }, [visible]);
 
   useEffect(() => {
-    if (selectedProgramId) {
-      const selectedProgram = programs.find((program) => program.id === selectedProgramId);
-      if (selectedProgram) {
-        const enrolledMembers = members.filter((member) =>
-          selectedProgram.enrolledStudents.includes(member.id)
-        );
-        setFilteredMembers(enrolledMembers);
-      }
-    } else{
-      setFilteredMembers([]);
-    }
-  }, [selectedProgramId, programs, members]);
+    let cancelled = false;
 
-  const handleAddProgram = async () => {
-    try {
-      if (!programName.trim()) {
-        setError('Program name is required');
-        setShowErrorModal(true);
+    const loadMembersForProgram = async () => {
+      if (!selectedProgramId) {
+        setFilteredMembers([]);
+        setMemberOrderIds([]);
         return;
       }
-      
-      setLocalLoading(true);
-      setError(null);
-      
-      await addProgram(programName.trim());
-      setProgramName('');
-      setProgramModal(false);
-      
-    } catch (error) {
-      console.error('Error adding program:', error);
-      setError(error.message || 'Failed to add program. Please try again.');
-      setShowErrorModal(true);
-    } finally {
-      setLocalLoading(false);
-    }
+
+      const selectedProgram = programs.find((program) => program.id === selectedProgramId);
+      if (!selectedProgram) {
+        setFilteredMembers([]);
+        return;
+      }
+
+      const orderIds = await getProgramMemberOrder(selectedProgramId);
+      if (cancelled) return;
+      setMemberOrderIds(orderIds);
+
+      const enrolledMembers = members.filter((member) => {
+        const inProgram = selectedProgram.enrolledStudents.includes(member.id);
+        const matchesType =
+          filterMemberType === 'all' || member.type === filterMemberType;
+        return inProgram && matchesType;
+      });
+
+      setFilteredMembers(sortMembersByProgramOrder(enrolledMembers, orderIds));
+    };
+
+    loadMembersForProgram();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProgramId, programs, members, filterMemberType]);
+
+  const displayedMembers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const ordered = sortMembersByProgramOrder(filteredMembers, memberOrderIds);
+    if (!query) return ordered;
+    return ordered.filter((member) => {
+      const fullName = `${member.firstName || ''} ${member.lastName || ''}`.toLowerCase();
+      return (
+        fullName.includes(query) ||
+        (member.firstName || '').toLowerCase().includes(query) ||
+        (member.lastName || '').toLowerCase().includes(query)
+      );
+    });
+  }, [filteredMembers, searchQuery, memberOrderIds]);
+
+  const openSearch = () => {
+    setSearchOpen(true);
+    setTimeout(() => searchInputRef.current?.focus?.(), 50);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
   };
 
   const handleMarkAttendance = (memberId, status) => {
@@ -157,6 +196,8 @@ const AttendanceModal = ({ visible, onClose }) => {
   };
 
   const handleSaveAttendance = async () => {
+    if (localLoading || attendanceLoading) return;
+
     try {
       // Validation
       if (!selectedProgramId) {
@@ -174,10 +215,12 @@ const AttendanceModal = ({ visible, onClose }) => {
       setLocalLoading(true);
       setError(null);
       
+      const selectedProgram = programs.find((p) => p.id === selectedProgramId);
       const attendanceRecord = {
         date: selectedDate.toISOString(),
         programId: selectedProgramId,
         classStartTime: classStartTime.toTimeString().slice(0, 5),
+        maxLateMinutes: selectedProgram?.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES,
         members: attendance.map((att) => {
           const member = members.find((m) => m.id === att.memberId);
           return {
@@ -192,10 +235,19 @@ const AttendanceModal = ({ visible, onClose }) => {
       };
       
       await saveAttendanceRecord(attendanceRecord);
+
+      // Keep recently marked students at the top for next session
+      const markedOrder = attendance.map((att) => att.memberId);
+      await bumpProgramMemberOrder(selectedProgramId, markedOrder);
+      const refreshedOrder = await getProgramMemberOrder(selectedProgramId);
+      setMemberOrderIds(refreshedOrder);
       
       // Reset form
       setAttendance([]);
       setSelectedProgramId(null);
+      setFilterMemberType('all');
+      setSearchQuery('');
+      setSearchOpen(false);
       setProgramName('');
       onClose();
       
@@ -210,9 +262,15 @@ const AttendanceModal = ({ visible, onClose }) => {
 
   const onCancel = () => {
     setSelectedProgramId(null);
+    setFilterMemberType('all');
+    setSearchQuery('');
+    setSearchOpen(false);
     setAttendance([]);
     onClose();
   };
+
+  const isSaving = localLoading || attendanceLoading;
+  const markedCount = attendance.length;
 
   const renderItem = ({ item }) => {
     const memberAttendance = attendance.find(a => a.memberId === item.id);
@@ -225,7 +283,7 @@ const AttendanceModal = ({ visible, onClose }) => {
         <View style={styles.memberInfo}>
           <Text style={styles.memberName}>{item.firstName} {item.lastName}</Text>
           <Text style={styles.memberClass}>
-            {members.find(m => m.id === item.id)?.classId || 'No Class'}
+            {item.type || 'Regular'}
           </Text>
           {isPresent && arrivalTime && (
             <View style={styles.timeContainer}>
@@ -327,162 +385,207 @@ const AttendanceModal = ({ visible, onClose }) => {
             opacity: fadeValue
           }
         ]}>
-          {/* Header with gradient */}
           <LinearGradient
             colors={['#667eea', '#764ba2']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.modalHeader}
           >
-            <Text style={styles.modalTitle}>Take Attendance</Text>
-            <TouchableOpacity 
-              onPress={onCancel} 
-              style={styles.closeButton}
-              activeOpacity={0.7}
-            >
-              <Icon name="close" size={24} color="white" />
-            </TouchableOpacity>
+            <View style={styles.headerLeft}>
+              {searchOpen ? (
+                <View style={styles.headerSearchBox}>
+                  <Icon name="search" size={18} color="#495057" />
+                  <TextInput
+                    ref={searchInputRef}
+                    style={styles.headerSearchInput}
+                    placeholder="Search student..."
+                    placeholderTextColor="#868e96"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    selectionColor="#667eea"
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Icon name="cancel" size={18} color="#868e96" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  Attendance
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                onPress={searchOpen ? closeSearch : openSearch}
+                style={styles.headerIconButton}
+                activeOpacity={0.8}
+              >
+                <Icon name={searchOpen ? 'close' : 'search'} size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveAttendance}
+                disabled={isSaving}
+                style={[styles.headerSaveButton, isSaving && styles.headerSaveButtonDisabled]}
+                activeOpacity={0.8}
+              >
+                {isSaving ? (
+                  <Text style={styles.headerSaveText}>Saving...</Text>
+                ) : (
+                  <>
+                    <Icon name="save" size={16} color="white" />
+                    <Text style={styles.headerSaveText}>
+                      Save{markedCount > 0 ? ` (${markedCount})` : ''}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={onCancel} 
+                style={styles.closeButton}
+                activeOpacity={0.7}
+              >
+                <Icon name="close" size={22} color="white" />
+              </TouchableOpacity>
+            </View>
           </LinearGradient>
 
-          {/* Modal Content */}
-                   {/* Modal Content */}
           <View style={styles.modalContent}>
-            {/* Date Picker */}
-            <TouchableOpacity 
-              onPress={() => setShowDatePicker(true)} 
-              style={styles.datePickerButton}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#f8f9fa', '#e9ecef']}
-                style={styles.datePickerGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Icon name="calendar-today" size={20} color="#6c757d" />
-                <Text style={styles.datePickerText}>
-                  {selectedDate.toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                  })}
-                </Text>
-                <Icon name="chevron-right" size={20} color="#6c757d" />
-              </LinearGradient>
-            </TouchableOpacity>
-            {showDatePicker && (
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display="default"
-                onChange={(event, date) => {
-                  setShowDatePicker(false);
-                  if (date) setSelectedDate(date);
-                }}
-              />
-            )}
-
-            {/* Class Start Time Picker */}
-            <TouchableOpacity 
-              onPress={() => setShowClassTimePicker(true)} 
-              style={styles.timePickerButton}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#fff3cd', '#ffeaa7']}
-                style={styles.timePickerGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Icon name="schedule" size={20} color="#856404" />
-                <Text style={styles.timePickerText}>
-                  Class Start Time: {classStartTime.toTimeString().slice(0, 5)}
-                </Text>
-                <Icon name="chevron-right" size={20} color="#856404" />
-              </LinearGradient>
-            </TouchableOpacity>
-            {showClassTimePicker && (
-              <DateTimePicker
-                value={classStartTime}
-                mode="time"
-                display="default"
-                onChange={handleClassTimeChange}
-              />
-            )}
-
-            {/* Program Dropdown */}
-            <CustomDropDown
-              label="Select Program"
-              rightBtn={true}
-              rightBtnLabel="Add Program"
-              data={programs}
-              currentSelected={programs.find((program) => program.id === selectedProgramId)}
-              setSelected={(input) => setSelectedProgramId(input.id)}
-              required={true}
-              rightBtnGo={() => setProgramModal(true)}
-              containerStyle={styles.dropdownContainer}
-            />
-            <AddProgramModal
-              visible={programModal}
-              programName={programName}
-              setProgramName={setProgramName}
-              onClose={() => setProgramModal(false)}
-              isEditing={false}
-              editingProgram={null}
-            />
-
-            {/* Member List */}
-            <Text style={styles.sectionTitle}>Mark Attendance</Text>
-            <ScrollView style={{marginBottom:300}}>
-              <FlatList
-                data={filteredMembers}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <Icon name="people-outline" size={40} color="#6c757d" />
-                    <Text style={styles.emptyText}>No students enrolled</Text>
-                    <Text style={styles.emptySubText}>Select a program to view students</Text>
-                  </View>
-                }
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-                scrollEnabled={false}
-              />
-
-              {/* Action Buttons */}
-              <View style={styles.buttonContainer}>
-                <TouchableOpacity 
-                  onPress={handleSaveAttendance} 
-                  disabled={localLoading || attendanceLoading}
-                  style={[styles.saveButton, (localLoading || attendanceLoading) && styles.disabledButton]}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={(localLoading || attendanceLoading) ? ['#e9ecef', '#dee2e6'] : ['#43e97b', '#38f9d7']}
-                    style={styles.buttonGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
+            <FlatList
+              data={displayedMembers}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              contentContainerStyle={styles.listContent}
+              keyboardShouldPersistTaps="handled"
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              ListHeaderComponent={
+                <View>
+                  <TouchableOpacity 
+                    onPress={() => setShowDatePicker(true)} 
+                    style={styles.datePickerButton}
+                    activeOpacity={0.8}
                   >
-                    {(localLoading || attendanceLoading) ? (
-                      <>
-                        <Icon name="hourglass-empty" size={20} color="#6c757d" style={styles.buttonIcon} />
-                        <Text style={[styles.buttonText, styles.disabledButtonText]}>Saving...</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Text style={styles.buttonText}>Save Attendance</Text>
-                        <Icon name="save" size={20} color="white" style={styles.buttonIcon} />
-                      </>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+                    <LinearGradient
+                      colors={['#f8f9fa', '#e9ecef']}
+                      style={styles.datePickerGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <Icon name="calendar-today" size={20} color="#6c757d" />
+                      <Text style={styles.datePickerText}>
+                        {selectedDate.toLocaleDateString('en-US', { 
+                          weekday: 'short', 
+                          year: 'numeric', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </Text>
+                      <Icon name="chevron-right" size={20} color="#6c757d" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    onPress={() => setShowClassTimePicker(true)} 
+                    style={styles.timePickerButton}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={['#fff3cd', '#ffeaa7']}
+                      style={styles.timePickerGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <Icon name="schedule" size={20} color="#856404" />
+                      <Text style={styles.timePickerText}>
+                        Class Start Time: {classStartTime.toTimeString().slice(0, 5)}
+                      </Text>
+                      <Icon name="chevron-right" size={20} color="#856404" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <CustomDropDown
+                    label="Select Program"
+                    rightBtn={true}
+                    rightBtnLabel="Add Program"
+                    data={programs}
+                    currentSelected={programs.find((program) => program.id === selectedProgramId)}
+                    setSelected={(input) => setSelectedProgramId(input.id)}
+                    required={true}
+                    rightBtnGo={() => setProgramModal(true)}
+                    containerStyle={styles.dropdownContainer}
+                  />
+
+                  <CustomDropDown
+                    label="Filter by Type"
+                    data={TYPE_FILTER_OPTIONS}
+                    currentSelected={TYPE_FILTER_OPTIONS.find((option) => option.id === filterMemberType)}
+                    setSelected={(input) => setFilterMemberType(input.id)}
+                    containerStyle={styles.dropdownContainer}
+                  />
+
+                  <Text style={styles.sectionTitle}>
+                    Mark Attendance
+                    {selectedProgramId ? ` (${displayedMembers.length})` : ''}
+                  </Text>
+                </View>
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Icon name="people-outline" size={40} color="#6c757d" />
+                  <Text style={styles.emptyText}>No students found</Text>
+                  <Text style={styles.emptySubText}>
+                    {!selectedProgramId
+                      ? 'Select a program to view students'
+                      : searchQuery.trim()
+                        ? 'No match for your search. Try another name.'
+                        : 'Try another type filter or enroll students in this program'}
+                  </Text>
+                </View>
+              }
+            />
           </View>
+
+          <AddProgramModal
+            visible={programModal}
+            programName={programName}
+            setProgramName={setProgramName}
+            maxLateMinutes={programMaxLateMinutes}
+            setMaxLateMinutes={setProgramMaxLateMinutes}
+            onClose={() => {
+              setProgramModal(false);
+              setProgramMaxLateMinutes(String(DEFAULT_MAX_LATE_MINUTES));
+            }}
+            isEditing={false}
+            editingProgram={null}
+          />
         </Animated.View>
       </Animated.View>
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display="default"
+          onChange={(event, date) => {
+            setShowDatePicker(false);
+            if (date) setSelectedDate(date);
+          }}
+        />
+      )}
+
+      {showClassTimePicker && (
+        <DateTimePicker
+          value={classStartTime}
+          mode="time"
+          display="default"
+          onChange={handleClassTimeChange}
+        />
+      )}
 
       {/* Time Picker for Individual Students */}
       {showTimePicker && (
@@ -499,7 +602,7 @@ const AttendanceModal = ({ visible, onClose }) => {
         onClose={() => setShowErrorModal(false)}
         title="Error"
         message={error}
-        onRetry={error && error.includes('attendance') ? handleSaveAttendance : handleAddProgram}
+        onRetry={handleSaveAttendance}
         buttonText="Try Again"
       />
       
@@ -528,6 +631,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: width * 0.9,
+    height: '85%',
     maxHeight: '85%',
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -539,17 +643,71 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   modalHeader: {
-    paddingVertical: 20,
-    paddingHorizontal: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerLeft: {
+    flex: 1,
+    marginRight: 8,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: 'white',
     letterSpacing: 0.5,
+  },
+  headerSearchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    minHeight: 38,
+  },
+  headerSearchInput: {
+    flex: 1,
+    color: '#212529',
+    fontSize: 15,
+    fontWeight: '500',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 18,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  headerSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(67, 233, 123, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginRight: 8,
+  },
+  headerSaveButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  headerSaveText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 13,
+    marginLeft: 4,
   },
   closeButton: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -561,7 +719,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    padding: 20,
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   datePickerButton: {
     marginBottom: 15,

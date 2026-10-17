@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MEMBER_TYPES } from '../constants/memberTypes';
 
 const ImportGuideModal = ({ visible, onClose, onProceed }) => {
   return (
@@ -28,33 +29,54 @@ const ImportGuideModal = ({ visible, onClose, onProceed }) => {
           <ScrollView contentContainerStyle={styles.contentContainer}>
             <Text style={styles.sectionTitle}>Required file format</Text>
             <Text style={styles.paragraph}>
-              Prepare an Excel or CSV file with a header row and two columns:
+              Prepare an Excel or CSV file with a header row and three columns:
             </Text>
             <View style={styles.bulletRow}><Text style={styles.bullet}>•</Text><Text style={styles.bulletText}>First Name</Text></View>
             <View style={styles.bulletRow}><Text style={styles.bullet}>•</Text><Text style={styles.bulletText}>Last Name</Text></View>
+            <View style={styles.bulletRow}><Text style={styles.bullet}>•</Text><Text style={styles.bulletText}>Type</Text></View>
 
             <Text style={[styles.paragraph, { marginTop: 10 }]}>Supported header names:</Text>
             <View style={styles.bulletRow}><Text style={styles.bullet}>•</Text><Text style={styles.bulletText}>First name: "First Name", "firstName", or "First"</Text></View>
             <View style={styles.bulletRow}><Text style={styles.bullet}>•</Text><Text style={styles.bulletText}>Last name: "Last Name", "lastName", or "Last"</Text></View>
+            <View style={styles.bulletRow}><Text style={styles.bullet}>•</Text><Text style={styles.bulletText}>Type: "Type", "Member Type", or "Student Type"</Text></View>
+
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Allowed Type values</Text>
+            {MEMBER_TYPES.map((type) => (
+              <View key={type} style={styles.bulletRow}>
+                <Text style={styles.bullet}>•</Text>
+                <Text style={styles.bulletText}>{type}</Text>
+              </View>
+            ))}
+            <Text style={[styles.paragraph, { marginTop: 6 }]}>
+              Type is case-insensitive. Rows with any other type are skipped.
+            </Text>
 
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Example</Text>
             <View style={styles.exampleBox}>
               <View style={styles.exampleRow}>
                 <Text style={[styles.exampleCell, styles.exampleHeader]}>First Name</Text>
                 <Text style={[styles.exampleCell, styles.exampleHeader]}>Last Name</Text>
+                <Text style={[styles.exampleCell, styles.exampleHeader, styles.lastCell]}>Type</Text>
               </View>
               <View style={styles.exampleRow}>
                 <Text style={styles.exampleCell}>Abel</Text>
                 <Text style={styles.exampleCell}>Kebede</Text>
+                <Text style={[styles.exampleCell, styles.lastCell]}>Regular</Text>
               </View>
               <View style={styles.exampleRow}>
                 <Text style={styles.exampleCell}>Hanna</Text>
                 <Text style={styles.exampleCell}>Solomon</Text>
+                <Text style={[styles.exampleCell, styles.lastCell]}>Extension</Text>
+              </View>
+              <View style={styles.exampleRow}>
+                <Text style={styles.exampleCell}>Dawit</Text>
+                <Text style={styles.exampleCell}>Alemu</Text>
+                <Text style={[styles.exampleCell, styles.lastCell]}>Distant</Text>
               </View>
             </View>
 
             <Text style={[styles.paragraph, { marginTop: 10 }]}>
-              Tips: put your data on the first sheet, keep one student per row, and ensure names are not empty.
+              Tips: put your data on the first sheet, keep one student per row, and ensure names and type are filled.
             </Text>
 
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Supported file types</Text>
@@ -162,6 +184,9 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: '#dee2e6',
     color: 'black'
+  },
+  lastCell: {
+    borderRightWidth: 0,
   },
   exampleHeader: {
     backgroundColor: '#f1f3f5',

@@ -6,6 +6,7 @@
 
 -- Create custom types
 CREATE TYPE attendance_status AS ENUM ('Present', 'Absent');
+CREATE TYPE member_type AS ENUM ('Regular', 'Extension', 'Distant');
 
 -- Users table (extends Supabase auth.users)
 CREATE TABLE public.profiles (
@@ -34,6 +35,7 @@ CREATE TABLE public.members (
     class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
+    type member_type NOT NULL DEFAULT 'Regular',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -43,6 +45,7 @@ CREATE TABLE public.programs (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
+    max_late_minutes INTEGER NOT NULL DEFAULT 60 CHECK (max_late_minutes > 0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -63,6 +66,7 @@ CREATE TABLE public.attendance_records (
     program_id UUID REFERENCES public.programs(id) ON DELETE CASCADE NOT NULL,
     date DATE NOT NULL,
     class_start_time TIME NOT NULL,
+    max_late_minutes INTEGER NOT NULL DEFAULT 60 CHECK (max_late_minutes > 0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -84,6 +88,7 @@ CREATE TABLE public.attendance_entries (
 CREATE INDEX idx_classes_user_id ON public.classes(user_id);
 CREATE INDEX idx_members_user_id ON public.members(user_id);
 CREATE INDEX idx_members_class_id ON public.members(class_id);
+CREATE INDEX idx_members_type ON public.members(type);
 CREATE INDEX idx_programs_user_id ON public.programs(user_id);
 CREATE INDEX idx_program_enrollments_program_id ON public.program_enrollments(program_id);
 CREATE INDEX idx_program_enrollments_member_id ON public.program_enrollments(member_id);
@@ -219,6 +224,7 @@ SELECT
     m.id as member_id,
     m.first_name,
     m.last_name,
+    m.type as member_type,
     c.name as class_name
 FROM public.programs p
 JOIN public.program_enrollments pe ON p.id = pe.program_id

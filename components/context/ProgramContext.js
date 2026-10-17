@@ -5,7 +5,7 @@ export const ProgramContext = createContext();
 
 export const ProgramProvider = ({ children }) => {
   const [programs, setPrograms] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -26,6 +26,7 @@ export const ProgramProvider = ({ children }) => {
             return {
               id: program.id,
               name: program.name,
+              maxLateMinutes: program.max_late_minutes ?? 60,
               enrolledStudents: enrollments.map(e => e.member_id),
               created_at: program.created_at,
               updated_at: program.updated_at
@@ -35,6 +36,7 @@ export const ProgramProvider = ({ children }) => {
             return {
               id: program.id,
               name: program.name,
+              maxLateMinutes: program.max_late_minutes ?? 60,
               enrolledStudents: [],
               created_at: program.created_at,
               updated_at: program.updated_at
@@ -58,8 +60,12 @@ export const ProgramProvider = ({ children }) => {
       setError(null);
       
       const programName = typeof newProgram === 'string' ? newProgram : newProgram.name;
-      await supabaseService.addProgram(programName);
-      await loadPrograms(); // Reload to get updated data
+      const maxLateMinutes =
+        typeof newProgram === 'string'
+          ? 60
+          : Number(newProgram.maxLateMinutes) || 60;
+      await supabaseService.addProgram(programName, maxLateMinutes);
+      await loadPrograms();
     } catch (error) {
       console.error("Error adding program:", error);
       setError(error.message);
@@ -74,8 +80,11 @@ export const ProgramProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      await supabaseService.updateProgram(updatedProgram.id, { name: updatedProgram.name });
-      await loadPrograms(); // Reload to get updated data
+      await supabaseService.updateProgram(updatedProgram.id, {
+        name: updatedProgram.name,
+        maxLateMinutes: Number(updatedProgram.maxLateMinutes) || 60,
+      });
+      await loadPrograms();
     } catch (error) {
       console.error("Error updating program:", error);
       setError(error.message);

@@ -6,7 +6,7 @@ export const AttendanceContext = createContext();
 // AttendanceContext.js
 export const AttendanceProvider = ({ children }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -26,6 +26,7 @@ export const AttendanceProvider = ({ children }) => {
         programId: record.program_id,
         programName: record.programs?.name || 'Unknown Program',
         classStartTime: record.class_start_time,
+        maxLateMinutes: record.max_late_minutes ?? 60,
         members: record.attendance_entries?.map(entry => ({
           memberId: entry.member_id,
           firstName: entry.members?.first_name || '',
@@ -56,6 +57,7 @@ export const AttendanceProvider = ({ children }) => {
         programId: newRecord.programId,
         date: newRecord.date,
         classStartTime: newRecord.classStartTime,
+        maxLateMinutes: Number(newRecord.maxLateMinutes) || 60,
         members: newRecord.members.map(member => ({
           memberId: member.memberId,
           status: member.status,
@@ -84,6 +86,7 @@ export const AttendanceProvider = ({ children }) => {
       const supabaseRecord = {
         date: updatedRecord.date,
         classStartTime: updatedRecord.classStartTime,
+        maxLateMinutes: Number(updatedRecord.maxLateMinutes) || 60,
         members: updatedRecord.members.map(member => ({
           memberId: member.memberId,
           status: member.status,

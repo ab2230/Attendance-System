@@ -8,6 +8,7 @@ const SigninScreen = ({ navigation }) => {
   const { signIn, loading } = useContext(AuthContext);
 
   const handleSignin = async () => {
+    if (loading) return;
     if (!email || !password) {
       Alert.alert('Error', 'Please fill all fields');
       return;

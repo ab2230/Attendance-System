@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -6,12 +6,13 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   FlatList, 
-  Alert,
+  TextInput,
   Dimensions 
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { getAttendanceEditDeadline } from '../../utils/attendanceEditWindow';
 
 const { width } = Dimensions.get('window');
 
@@ -22,20 +23,42 @@ const EditAttendanceModal = ({
   members, 
   programs,
   handleUpdateAttendance,
-  handleSaveUpdatedAttendance 
+  handleSaveUpdatedAttendance,
+  saving = false,
 }) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedMemberForTime, setSelectedMemberForTime] = useState(null);
   const [showClassTimePicker, setShowClassTimePicker] = useState(false);
   const [localRecord, setLocalRecord] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (selectedRecord) {
       setLocalRecord({ ...selectedRecord });
+      setSearchQuery('');
     }
   }, [selectedRecord]);
 
+  const filteredMembers = useMemo(() => {
+    if (!selectedRecord?.members) return [];
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return selectedRecord.members;
+    return selectedRecord.members.filter((item) => {
+      const member = members.find((m) => m.id === item.memberId);
+      const name = member
+        ? `${member.firstName} ${member.lastName}`.toLowerCase()
+        : `${item.firstName || ''} ${item.lastName || ''}`.toLowerCase();
+      return name.includes(query);
+    });
+  }, [selectedRecord, members, searchQuery]);
+
   if (!selectedRecord || !localRecord) return null;
+
+  const editDeadline = getAttendanceEditDeadline(
+    selectedRecord.date,
+    selectedRecord.classStartTime,
+    selectedRecord.maxLateMinutes
+  );
 
   const getProgramName = (programId) => {
     const program = programs.find(p => p.id === programId);
@@ -199,29 +222,69 @@ const EditAttendanceModal = ({
                 </Text>
                 <Icon name="edit" size={16} color="#667eea" />
               </TouchableOpacity>
+
+              {editDeadline && (
+                <Text style={styles.editWindowHint}>
+                  Editable until {editDeadline.toLocaleString()} ({selectedRecord.maxLateMinutes || 60} min window)
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.searchContainer}>
+              <Icon name="search" size={18} color="#6c757d" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search student..."
+                placeholderTextColor="#adb5bd"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Icon name="cancel" size={18} color="#adb5bd" />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Members List */}
-            <Text style={styles.sectionTitle}>Students ({selectedRecord.members.length})</Text>
+            <Text style={styles.sectionTitle}>
+              Students ({filteredMembers.length}/{selectedRecord.members.length})
+            </Text>
             <FlatList
-              data={selectedRecord.members}
+              data={filteredMembers}
               keyExtractor={(item) => item.memberId}
               renderItem={renderMemberItem}
               style={styles.membersList}
+              keyboardShouldPersistTaps="handled"
               ItemSeparatorComponent={() => <View style={styles.separator} />}
+              ListEmptyComponent={
+                <Text style={styles.emptySearch}>No students match your search</Text>
+              }
             />
 
             {/* Action Buttons */}
             <View style={styles.actionButtonsContainer}>
-              <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
+              <TouchableOpacity 
+                onPress={onClose} 
+                style={[styles.cancelButton, saving && styles.disabledButton]}
+                disabled={saving}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleSaveUpdatedAttendance} style={styles.saveButton}>
+              <TouchableOpacity 
+                onPress={handleSaveUpdatedAttendance} 
+                style={styles.saveButton}
+                disabled={saving}
+              >
                 <LinearGradient
-                  colors={['#43e97b', '#38f9d7']}
+                  colors={saving ? ['#e9ecef', '#dee2e6'] : ['#43e97b', '#38f9d7']}
                   style={styles.saveButtonGradient}
                 >
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                  <Text style={[styles.saveButtonText, saving && styles.disabledButtonText]}>
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -313,6 +376,35 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: '#343a40',
+  },
+  editWindowHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#4da0b0',
+    fontWeight: '500',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    minHeight: 44,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 15,
+    color: '#343a40',
+    paddingVertical: 8,
+  },
+  emptySearch: {
+    textAlign: 'center',
+    color: '#adb5bd',
+    paddingVertical: 20,
   },
   sectionTitle: {
     fontSize: 16,
@@ -434,6 +526,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
     fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  disabledButtonText: {
+    color: '#6c757d',
   },
 });
 

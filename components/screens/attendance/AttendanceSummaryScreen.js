@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   useWindowDimensions,
+  RefreshControl,
 } from "react-native";
 import { ClassContext } from "../../context/ClassContext";
 import { MemberContext } from "../../context/MemberContext";
@@ -16,11 +17,26 @@ import FontAwesome from "react-native-vector-icons/FontAwesome";
 import { exportToTextFile } from "../../common/exportCSV";
 
 const AttendanceSummaryScreen = () => {
-  const { attendanceRecords } = useContext(AttendanceContext);
-  const { classes } = useContext(ClassContext);
-  const { programs } = useContext(ProgramContext);
-  const { members } = useContext(MemberContext);
+  const { attendanceRecords, loadAttendanceRecords } = useContext(AttendanceContext);
+  const { classes, loadClasses } = useContext(ClassContext);
+  const { programs, loadPrograms } = useContext(ProgramContext);
+  const { members, loadMembers } = useContext(MemberContext);
   const { height } = useWindowDimensions();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadAttendanceRecords(),
+        loadClasses(),
+        loadPrograms(),
+        loadMembers(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [selectedProgramId, setSelectedProgramId] = useState(null);
@@ -149,7 +165,13 @@ const AttendanceSummaryScreen = () => {
   ];
 
   return (
-    <View style={styles.mainContainer}>
+    <ScrollView
+      style={styles.mainContainer}
+      contentContainerStyle={{ flexGrow: 1 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+      }
+    >
       <CustomDropDown
         label="Select Program"
         data={programs}
@@ -285,7 +307,7 @@ const AttendanceSummaryScreen = () => {
           <Text style={styles.exportText}>Export</Text>
         </TouchableOpacity>
       )}
-    </View>
+    </ScrollView>
   );
 };
 

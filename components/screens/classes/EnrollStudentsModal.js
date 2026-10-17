@@ -16,7 +16,7 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
   const [selectedClassId, setSelectedClassId] = useState(null);
 
   const program = programs.find((p) => p.id === programId);
-  const enrolledStudentIds = program.enrolledStudents || [];
+  const enrolledStudentIds = program?.enrolledStudents || [];
 
   // Filter students who are not yet enrolled
   let availableStudents = members.filter((member) => !enrolledStudentIds.includes(member.id));
@@ -40,22 +40,24 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
   };
 
   const handleEnrollStudents = async () => {
+    if (loading || selectedStudents.length === 0) return;
     try {
       await enrollStudents(programId, [...enrolledStudentIds, ...selectedStudents]);
+      setSelectedStudents([]);
       onClose();
     } catch (error) {
       console.error('Error enrolling selected students:', error);
-      // Error handling is managed by the context
     }
   };
 
   const handleEnrollAll = async () => {
+    if (loading || filteredStudents.length === 0) return;
     try {
       await enrollStudents(programId, [...enrolledStudentIds, ...availableStudents.map((s) => s.id)]);
+      setSelectedStudents([]);
       onClose();
     } catch (error) {
       console.error('Error enrolling all students:', error);
-      // Error handling is managed by the context
     }
   };
 
@@ -88,7 +90,10 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
             style={styles.studentItem}
             onPress={() => toggleStudentSelection(item.id)}
           >
-            <Text style={styles.studentName}>{item.firstName} {item.lastName}</Text>
+            <View>
+              <Text style={styles.studentName}>{item.firstName} {item.lastName}</Text>
+              <Text style={styles.studentType}>{item.type || 'Regular'}</Text>
+            </View>
             {selectedStudents.includes(item.id) && <Text style={styles.checkmark}>✓</Text>}
           </TouchableOpacity>
         )}
@@ -200,6 +205,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#000",
+  },
+  studentType: {
+    fontSize: 12,
+    color: "#6c757d",
+    marginTop: 2,
   },
   checkmark: {
     fontSize: 18,

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -7,28 +7,47 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AuthContext } from '../../context/AuthContext';
+import { ClassContext } from '../../context/ClassContext';
+import { MemberContext } from '../../context/MemberContext';
+import { ProgramContext } from '../../context/ProgramContext';
+import { AttendanceContext } from '../../context/AttendanceContext';
 
 const ProfileScreen = () => {
   const { user, signOut, loading } = useContext(AuthContext);
-  const [profile, setProfile] = useState(null);
+  const { loadClasses } = useContext(ClassContext);
+  const { loadMembers } = useContext(MemberContext);
+  const { loadPrograms } = useContext(ProgramContext);
+  const { loadAttendanceRecords } = useContext(AttendanceContext);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Simple fallback data from user object
   const displayName = user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || 'No email';
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
+    if (profileLoading) return;
     setProfileLoading(true);
-    // Simulate refresh without calling problematic getProfile
-    setTimeout(() => {
+    try {
+      await Promise.all([
+        loadClasses(),
+        loadMembers(),
+        loadPrograms(),
+        loadAttendanceRecords(),
+      ]);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to refresh data. Please try again.');
+    } finally {
       setProfileLoading(false);
-    }, 1000);
+    }
   };
 
   const handleLogout = () => {
+    if (loggingOut || loading) return;
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -41,10 +60,13 @@ const ProfileScreen = () => {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
+            setLoggingOut(true);
             try {
               await signOut();
             } catch (error) {
               Alert.alert('Error', 'Failed to logout. Please try again.');
+            } finally {
+              setLoggingOut(false);
             }
           },
         },
@@ -72,7 +94,12 @@ const ProfileScreen = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={profileLoading} onRefresh={handleRefresh} colors={['#3498db']} />
+      }
+    >
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <Icon name="account-circle" size={80} color="#3498db" />
@@ -124,11 +151,11 @@ const ProfileScreen = () => {
         <TouchableOpacity 
           style={[styles.actionButton, styles.logoutButton]} 
           onPress={handleLogout}
-          disabled={loading}
+          disabled={loading || loggingOut}
         >
           <Icon name="logout" size={20} color="#e74c3c" />
           <Text style={[styles.actionButtonText, styles.logoutButtonText]}>
-            {loading ? 'Logging out...' : 'Logout'}
+            {loading || loggingOut ? 'Logging out...' : 'Logout'}
           </Text>
           <Icon name="chevron-right" size={20} color="#e74c3c" />
         </TouchableOpacity>

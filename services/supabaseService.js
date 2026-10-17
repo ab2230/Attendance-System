@@ -191,22 +191,23 @@ class SupabaseService {
     }
   }
 
-  async addMember(firstName, lastName, classId) {
+  async addMember(firstName, lastName, classId, type = 'Regular') {
     try {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
 
       const { data, error } = await supabase
         .from('members')
-        .insert([{ 
-          first_name: firstName, 
-          last_name: lastName, 
+        .insert([{
+          first_name: firstName,
+          last_name: lastName,
           class_id: classId,
-          user_id: user.id 
+          type: type || 'Regular',
+          user_id: user.id
         }])
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     } catch (error) {
@@ -222,12 +223,13 @@ class SupabaseService {
         .update({
           first_name: updates.firstName,
           last_name: updates.lastName,
-          class_id: updates.classId
+          class_id: updates.classId,
+          type: updates.type || 'Regular',
         })
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     } catch (error) {
@@ -266,17 +268,21 @@ class SupabaseService {
     }
   }
 
-  async addProgram(name) {
+  async addProgram(name, maxLateMinutes = 60) {
     try {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
 
       const { data, error } = await supabase
         .from('programs')
-        .insert([{ name, user_id: user.id }])
+        .insert([{
+          name,
+          max_late_minutes: Number(maxLateMinutes) || 60,
+          user_id: user.id,
+        }])
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     } catch (error) {
@@ -287,13 +293,20 @@ class SupabaseService {
 
   async updateProgram(id, updates) {
     try {
+      const payload = {};
+      if (updates.name != null) payload.name = updates.name;
+      if (updates.maxLateMinutes != null || updates.max_late_minutes != null) {
+        payload.max_late_minutes =
+          Number(updates.maxLateMinutes ?? updates.max_late_minutes) || 60;
+      }
+
       const { data, error } = await supabase
         .from('programs')
-        .update(updates)
+        .update(payload)
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     } catch (error) {
@@ -409,7 +422,8 @@ class SupabaseService {
           user_id: user.id,
           program_id: attendanceData.programId,
           date: new Date(attendanceData.date).toISOString().split('T')[0],
-          class_start_time: attendanceData.classStartTime
+          class_start_time: attendanceData.classStartTime,
+          max_late_minutes: Number(attendanceData.maxLateMinutes) || 60,
         }])
         .select()
         .single();
@@ -446,7 +460,10 @@ class SupabaseService {
         .from('attendance_records')
         .update({
           date: new Date(attendanceData.date).toISOString().split('T')[0],
-          class_start_time: attendanceData.classStartTime
+          class_start_time: attendanceData.classStartTime,
+          ...(attendanceData.maxLateMinutes != null
+            ? { max_late_minutes: Number(attendanceData.maxLateMinutes) || 60 }
+            : {}),
         })
         .eq('id', recordId)
         .select()
@@ -516,9 +533,10 @@ class SupabaseService {
         for (const member of localData.members) {
           const matchingClass = classes.find(c => c.name === member.className);
           await this.addMember(
-            member.firstName, 
-            member.lastName, 
-            matchingClass?.id || null
+            member.firstName,
+            member.lastName,
+            matchingClass?.id || null,
+            member.type || 'Regular'
           );
         }
       }

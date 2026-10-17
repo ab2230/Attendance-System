@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, RefreshControl, ScrollView } from "react-native";
 import { SwipeListView } from "react-native-swipe-list-view";
 import { ClassContext } from "../../context/ClassContext";
 import { MemberContext } from "../../context/MemberContext";
@@ -14,11 +14,12 @@ import LoadingScreen from "../../common/LoadingScreen";
 import EmptyState from "../../common/EmptyState";
 import DeleteConfirmationModal from "../../common/DeleteConfirmationModal";
 import ImportGuideModal from "../../common/ImportGuideModal";
+import { DEFAULT_MEMBER_TYPE } from "../../constants/memberTypes";
 
 const MembersScreen = ({ route, navigation }) => {
   const { classId: initialClassId } = route.params;
   const { classes } = useContext(ClassContext);
-  const { members, addMember, updateMember, deleteMember, importMembers } = useContext(MemberContext);
+  const { members, deleteMember, importMembers, loadMembers, loading } = useContext(MemberContext);
   
   const [confirmationModal, setConfirmationModal] = useState(false);
   const [memberIdTobeDeleted, setMemberIdTobeDeleted] = useState(null);
@@ -26,10 +27,14 @@ const MembersScreen = ({ route, navigation }) => {
   const [selectedClassId, setSelectedClassId] = useState(initialClassId);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [memberType, setMemberType] = useState(DEFAULT_MEMBER_TYPE);
   const [showModal, setShowModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [showImportGuide, setShowImportGuide] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -38,88 +43,105 @@ const MembersScreen = ({ route, navigation }) => {
     }).start();
   }, []);
 
-  // Derive filtered members directly from members array
   const filteredMembers = members.filter((m) => m.classId === selectedClassId);
-  
-  // Debug logging
-  console.log('MembersScreen Debug:', {
-    selectedClassId,
-    initialClassId,
-    totalMembers: members.length,
-    filteredMembersCount: filteredMembers.length,
-    members: members.map(m => ({ id: m.id, firstName: m.firstName, classId: m.classId }))
-  });
- // Show guidance first
- const handleImport = () => {
-   setShowImportGuide(true);
- };
 
- // Proceed with picking and importing after user sees the guide
- const proceedImport = async () => {
-   try {
-     setShowImportGuide(false);
-     setImporting(true);
-     const newMembers = await importStudents(selectedClassId, addMember);
-     console.log('this is the new members', newMembers);
-     if (newMembers === null) return; // User cancelled
-     if (newMembers.length > 0) {
-       const status = await importMembers(newMembers);
-       console.log('this is the status', status);
-       Alert.alert(
-         "Import Successful",
-         `Imported ${newMembers.length} students.`,
-         [{ text: "OK" }]
-       );
-     } else {
-       Alert.alert(
-         "No Valid Data",
-         "No valid student records found in the file.",
-         [{ text: "OK" }]
-       );
-     }
-   } catch (error) {
-     Alert.alert(
-       "Import Failed",
-       error.message || "Failed to import students",
-       [{ text: "OK" }]
-     );
-   } finally {
-     setImporting(false);
-   }
- };
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadMembers();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleImport = () => {
+    setShowImportGuide(true);
+  };
+
+  const proceedImport = async () => {
+    if (importing) return;
+    try {
+      setShowImportGuide(false);
+      setImporting(true);
+      const result = await importStudents(selectedClassId);
+      if (result === null) return;
+
+      const { members: newMembers, skipped } = result;
+      if (newMembers.length > 0) {
+        await importMembers(newMembers);
+        const skippedMsg = skipped.length
+          ? `\n\nSkipped ${skipped.length} row(s) with missing/invalid data.`
+          : '';
+        Alert.alert(
+          "Import Successful",
+          `Imported ${newMembers.length} students.${skippedMsg}`,
+          [{ text: "OK" }]
+        );
+      } else {
+        const reason = skipped.length
+          ? ` All ${skipped.length} row(s) were skipped. Check First Name, Last Name, and Type (Regular, Extension, or Distant).`
+          : '';
+        Alert.alert(
+          "No Valid Data",
+          `No valid student records found in the file.${reason}`,
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error) {
+      const message = error?.message || "Failed to import students";
+      const needsMigration =
+        /could not find.*(column|'type'|\"type\").*members/i.test(message) ||
+        /'type' column/i.test(message) ||
+        /column.*type.*schema cache/i.test(message);
+
+      Alert.alert(
+        "Import Failed",
+        needsMigration
+          ? "Your database is missing the member 'type' column. Open Supabase → SQL Editor and run the file supabase/migrations/add_member_type.sql, then try importing again."
+          : message,
+        [{ text: "OK" }]
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleEditMember = (item) => {
     setEditingMember(item);
     setFirstName(item.firstName);
     setLastName(item.lastName);
+    setMemberType(item.type || DEFAULT_MEMBER_TYPE);
     setSelectedClassId(item.classId);
     setShowModal(true);
   };
 
-  const handleUpdateMember = () => {
-    if (firstName.trim() && lastName.trim() && editingMember) {
-      updateMember({ 
-        ...editingMember, 
-        firstName, 
-        lastName, 
-        classId: selectedClassId 
-      });
-      setFirstName("");
-      setLastName("");
-      setShowModal(false);
-      setEditingMember(null);
+  const handleDeleteMember = (id) => {
+    setMemberIdTobeDeleted(id);
+    setConfirmationModal(true);
+  };
+
+  const confirmDeleteMember = async () => {
+    if (deleting || !memberIdTobeDeleted) return;
+    setDeleting(true);
+    try {
+      await deleteMember(memberIdTobeDeleted);
+      setMemberIdTobeDeleted(null);
+      setConfirmationModal(false);
+    } catch (error) {
+      console.error("Error deleting member:", error);
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handleDeleteMember = (id) => {
-      setMemberIdTobeDeleted(id);
-      setConfirmationModal(true);
-  };
-if(importing){
-  return(
-    <LoadingScreen />
-  )
-}
+  if (importing) {
+    return <LoadingScreen text="Importing students..." />;
+  }
+
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+  );
+
   const renderHiddenItem = (data) => (
     <View style={styles.rowBack}>
       <TouchableOpacity
@@ -169,50 +191,67 @@ if(importing){
               {classes.find(c => c.id === item.classId)?.name || 'No Class'}
             </Text>
           </View>
-          {/* <Icon name="chevron-right" size={24} color="#6c757d" /> */}
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>{item.type || DEFAULT_MEMBER_TYPE}</Text>
+          </View>
         </LinearGradient>
       </Card>
     </Animated.View>
   );
-  
+
   return (
     <LinearGradient 
-    colors={['#f8f9fa', '#e9ecef']} 
-    style={styles.container}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 1 }}
-  >
-    <TopNavigator 
-    title="Members" 
-    backButton={true} 
-    navigation={navigation} 
-    uploadTrue={true} 
-    handleImport={handleImport}
-    importing={importing}/>
-    <ImportGuideModal
-      visible={showImportGuide}
-      onClose={() => setShowImportGuide(false)}
-      onProceed={proceedImport}
-    />
-    {
-      filteredMembers.length === 0 ? <View style={{flex:1}}><EmptyState 
-      icon="account-remove" 
-      title="No Students Found" 
-      message="There are no students enrolled yet. Add students to start tracking attendance. You can also add excel file with 2 columns of first name and last name" 
-    />
-    </View>:   <SwipeListView
-      data={filteredMembers}
-      keyExtractor={(item) => item.id}
-      renderItem={renderItem}
-      renderHiddenItem={renderHiddenItem}
-      leftOpenValue={85}
-      rightOpenValue={-85}
-      disableLeftSwipe={false}
-      disableRightSwipe={false}
-      contentContainerStyle={styles.listContent}
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
-    />
-    }
+      colors={['#f8f9fa', '#e9ecef']} 
+      style={styles.container}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <TopNavigator 
+        title="Members" 
+        backButton={true} 
+        navigation={navigation} 
+        uploadTrue={true} 
+        handleImport={handleImport}
+        importing={importing}
+      />
+      <ImportGuideModal
+        visible={showImportGuide}
+        onClose={() => setShowImportGuide(false)}
+        onProceed={proceedImport}
+      />
+
+      {loading && members.length === 0 ? (
+        <LoadingScreen
+          text="Loading members..."
+          backgroundColor="#f8f9fa"
+          color="#4da0b0"
+        />
+      ) : filteredMembers.length === 0 ? (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={refreshControl}
+        >
+          <EmptyState 
+            icon="account-remove" 
+            title="No Students Found" 
+            message="There are no students enrolled yet. Add students to start tracking attendance. You can also import an Excel file with First Name, Last Name, and Type (Regular, Extension, or Distant)." 
+          />
+        </ScrollView>
+      ) : (
+        <SwipeListView
+          data={filteredMembers}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          renderHiddenItem={renderHiddenItem}
+          leftOpenValue={85}
+          rightOpenValue={-85}
+          disableLeftSwipe={false}
+          disableRightSwipe={false}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          refreshControl={refreshControl}
+        />
+      )}
 
     <AddMembersModal 
       visible={showModal} 
@@ -221,6 +260,8 @@ if(importing){
       lastName={lastName}
       setFirstName={setFirstName}
       setLastName={setLastName}
+      memberType={memberType}
+      setMemberType={setMemberType}
       selectedClassId={selectedClassId}
       setSelectedClassId={setSelectedClassId}
       onClose={() => {
@@ -228,51 +269,37 @@ if(importing){
         setEditingMember(null);
         setFirstName("");
         setLastName("");
-        // Reset selectedClassId to the initial class when closing
+        setMemberType(DEFAULT_MEMBER_TYPE);
         setSelectedClassId(initialClassId);
       }}
       isEditing={!!editingMember}
       editingMember={editingMember}
     />
 
-    <DeleteConfirmationModal
-      visible={confirmationModal}
-      onClose={() => {
-        setMemberIdTobeDeleted(null)
-          Animated.spring(fadeAnim, {
-            toValue: 1,
-            friction: 3,
-            useNativeDriver: true,
-          }).start()
-        setConfirmationModal(false)
-      }}
-      onConfirm={() => 
-      {
-        deleteMember(memberIdTobeDeleted)
-        console.log("Student Deleted!")
-        setMemberIdTobeDeleted(null)
-        Animated.spring(fadeAnim, {
-          toValue: 1,
-          friction: 3,
-          useNativeDriver: true,
-        }).start()
-        setConfirmationModal(false)
-      }
-        }
-      title="Delete Student?"
-      message="Are you sure you want to remove this student? This cannot be undone."
-      icon="account-remove"
-    />
+      <DeleteConfirmationModal
+        visible={confirmationModal}
+        loading={deleting}
+        onClose={() => {
+          if (deleting) return;
+          setMemberIdTobeDeleted(null);
+          setConfirmationModal(false);
+        }}
+        onConfirm={confirmDeleteMember}
+        title="Delete Student?"
+        message="Are you sure you want to remove this student? This cannot be undone."
+        icon="account-remove"
+      />
 
       <AddButton 
         onClick={() => {
-          // Ensure selectedClassId is set to current class when adding new member
+          setEditingMember(null);
+          setMemberType(DEFAULT_MEMBER_TYPE);
           setSelectedClassId(initialClassId);
           setShowModal(true);
         }} 
         style={styles.addButton}
       />
-  </LinearGradient>
+    </LinearGradient>
   );
 };
 
@@ -305,6 +332,17 @@ const styles = StyleSheet.create({
   className: {
     fontSize: 14,
     color: '#6c757d',
+  },
+  typeBadge: {
+    backgroundColor: 'rgba(77, 160, 176, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4da0b0',
   },
   rowBack: {
     alignItems: "center",

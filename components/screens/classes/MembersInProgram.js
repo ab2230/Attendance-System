@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, Animated } from "react-native";
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, Animated, RefreshControl } from "react-native";
 import { ProgramContext } from "../../context/ProgramContext";
 import { MemberContext } from "../../context/MemberContext";
 import AddButton from '../../common/addButton';
@@ -8,12 +8,15 @@ import EnrollStudentsModal from "./EnrollStudentsModal";
 import LinearGradient from 'react-native-linear-gradient';
 import { Card } from "react-native-paper";
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import LoadingScreen from "../../common/LoadingScreen";
 
 const MembersInProgram = ({ route, navigation }) => {
   const { programId } = route.params;
-  const { programs, unenrollStudent } = useContext(ProgramContext);
-  const { members } = useContext(MemberContext);
+  const { programs, unenrollStudent, loadPrograms, loading: programsLoading } = useContext(ProgramContext);
+  const { members, loadMembers, loading: membersLoading } = useContext(MemberContext);
   const [showModal, setShowModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [unenrollingId, setUnenrollingId] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -29,7 +32,17 @@ const MembersInProgram = ({ route, navigation }) => {
     program?.enrolledStudents?.includes(member.id)
   );
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadPrograms(), loadMembers()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleUnenroll = (studentId) => {
+    if (unenrollingId) return;
     Alert.alert(
       "Unenroll Student",
       "Are you sure you want to unenroll this student?",
@@ -37,60 +50,77 @@ const MembersInProgram = ({ route, navigation }) => {
         { 
           text: "Cancel", 
           style: "cancel",
-          onPress: () => {
-            Animated.spring(fadeAnim, {
-              toValue: 1,
-              friction: 3,
-              useNativeDriver: true,
-            }).start();
-          } 
         },
         { 
           text: "Unenroll", 
-          onPress: () => {
-            Animated.timing(fadeAnim, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }).start(() => unenrollStudent(programId, studentId));
+          onPress: async () => {
+            setUnenrollingId(studentId);
+            try {
+              await unenrollStudent(programId, studentId);
+            } catch (error) {
+              Alert.alert("Error", error.message || "Failed to unenroll student");
+            } finally {
+              setUnenrollingId(null);
+            }
           } 
         },
       ]
     );
   };
 
-  const renderItem = ({ item }) => (
-    <Animated.View style={{ opacity: fadeAnim }}>
-      <Card style={styles.card}>
-        <LinearGradient
-          colors={['#ffffff', '#f8f9fa']}
-          style={styles.cardContent}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.studentInfo}>
-            <Text style={styles.studentName}>{item.firstName} {item.lastName}</Text>
-            <Text style={styles.programName}>{program?.name}</Text>
-          </View>
-          <TouchableOpacity 
-            onPress={() => handleUnenroll(item.id)}
-            style={styles.unenrollButton}
-            activeOpacity={0.7}
+  const renderItem = ({ item }) => {
+    const isUnenrolling = unenrollingId === item.id;
+    return (
+      <Animated.View style={{ opacity: fadeAnim }}>
+        <Card style={styles.card}>
+          <LinearGradient
+            colors={['#ffffff', '#f8f9fa']}
+            style={styles.cardContent}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
-            <LinearGradient
-              colors={['#ff6b6b', '#ff4545']}
-              style={styles.gradientButton}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+            <View style={styles.studentInfo}>
+              <Text style={styles.studentName}>{item.firstName} {item.lastName}</Text>
+              <Text style={styles.programName}>
+                {program?.name} · {item.type || 'Regular'}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => handleUnenroll(item.id)}
+              style={styles.unenrollButton}
+              activeOpacity={0.7}
+              disabled={!!unenrollingId}
             >
-              <Icon name="person-remove" size={20} color="white" />
-              <Text style={styles.unenrollText}>Unenroll</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </LinearGradient>
-      </Card>
-    </Animated.View>
-  );
+              <LinearGradient
+                colors={isUnenrolling || unenrollingId ? ['#e9ecef', '#dee2e6'] : ['#ff6b6b', '#ff4545']}
+                style={styles.gradientButton}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Icon name="person-remove" size={20} color={isUnenrolling || unenrollingId ? '#6c757d' : 'white'} />
+                <Text style={[styles.unenrollText, (isUnenrolling || unenrollingId) && styles.disabledText]}>
+                  {isUnenrolling ? '...' : 'Unenroll'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        </Card>
+      </Animated.View>
+    );
+  };
+
+  if ((programsLoading || membersLoading) && !program) {
+    return (
+      <LinearGradient colors={['#f8f9fa', '#e9ecef']} style={styles.container}>
+        <TopNavigator title="Enrolled Students" backButton={true} navigation={navigation} />
+        <LoadingScreen
+          text="Loading students..."
+          backgroundColor="#f8f9fa"
+          color="#4da0b0"
+        />
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient 
@@ -106,6 +136,9 @@ const MembersInProgram = ({ route, navigation }) => {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No students enrolled yet</Text>
@@ -134,6 +167,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 20,
+    flexGrow: 1,
   },
   card: {
     borderRadius: 12,
@@ -174,6 +208,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     marginLeft: 5,
+  },
+  disabledText: {
+    color: '#6c757d',
   },
   emptyContainer: {
     flex: 1,

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
+  RefreshControl,
 } from "react-native";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { ClassContext } from "../../context/ClassContext";
@@ -14,10 +15,25 @@ import { ProgramContext } from "../../context/ProgramContext";
 import { AttendanceContext } from "../../context/AttendanceContext";
 
 const AttendanceRecordsScreen = () => {
-  const { attendanceRecords } = useContext(AttendanceContext);
-  const { classes } = useContext(ClassContext);
-  const { programs } = useContext(ProgramContext);
-  const { members } = useContext(MemberContext);
+  const { attendanceRecords, loadAttendanceRecords } = useContext(AttendanceContext);
+  const { classes, loadClasses } = useContext(ClassContext);
+  const { programs, loadPrograms } = useContext(ProgramContext);
+  const { members, loadMembers } = useContext(MemberContext);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadAttendanceRecords(),
+        loadClasses(),
+        loadPrograms(),
+        loadMembers(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [selectedProgramId, setSelectedProgramId] = useState(null);
@@ -157,6 +173,9 @@ const AttendanceRecordsScreen = () => {
       <FlatList
         data={enrolledMembers}
         keyExtractor={(item) => item.id.toString()}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+        }
         ListEmptyComponent={
           <Text style={styles.emptyText}>No members found for this filter.</Text>
         }

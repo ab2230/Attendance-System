@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Modal, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Modal, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 const DeleteConfirmationModal = ({ 
@@ -8,7 +8,8 @@ const DeleteConfirmationModal = ({
   onConfirm, 
   title, 
   message, 
-  icon 
+  icon,
+  loading = false,
 }) => {
   return (
     <Modal transparent animationType="fade" visible={visible}>
@@ -18,11 +19,23 @@ const DeleteConfirmationModal = ({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <TouchableOpacity 
+              style={[styles.cancelButton, loading && styles.disabledButton]} 
+              onPress={onClose}
+              disabled={loading}
+            >
               <Text style={styles.buttonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteButton} onPress={onConfirm}>
-              <Text style={styles.buttonText}>Delete</Text>
+            <TouchableOpacity 
+              style={[styles.deleteButton, loading && styles.disabledButton]} 
+              onPress={onConfirm}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.buttonText}>Delete</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -80,6 +93,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#D32F2F",
     borderRadius: 5,
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   buttonText: {
     color: "#FFF",

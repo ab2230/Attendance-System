@@ -52,6 +52,8 @@ const AddClassModal = ({className, setClassName, visible, onClose, isEditing, ed
   }, [visible]);
 
   const handleSubmit = async () => {
+    if (localLoading || loading) return;
+
     try {
       // Validation
       if (!className.trim()) {
