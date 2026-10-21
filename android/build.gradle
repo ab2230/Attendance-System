@@ -4,7 +4,9 @@ buildscript {
         minSdkVersion = 24
         compileSdkVersion = 35
         targetSdkVersion = 35
-        ndkVersion = "26.1.10909125"
+        // Was 26.x (4 KB aligned). 27.1 supports 16 KB via ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES.
+        // After installing a full NDK r28+, you can switch to e.g. "28.0.13004108".
+        ndkVersion = "27.1.12297006"
         kotlinVersion = "2.0.21"
     }
     repositories {
@@ -15,6 +17,24 @@ buildscript {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+// Force 16 KB page-size support for all Android library modules (reanimated, screens, etc.)
+subprojects { subproject ->
+    subproject.afterEvaluate {
+        def androidExt = subproject.extensions.findByName("android")
+        if (androidExt != null) {
+            androidExt.defaultConfig {
+                externalNativeBuild {
+                    cmake {
+                        arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+                        // Extra safety for NDK r27 when packaging prebuilt/transitive natives
+                        // (r28 enables 16 KB alignment by default)
+                    }
+                }
+            }
+        }
     }
 }
 

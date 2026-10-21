@@ -84,8 +84,22 @@ android {
         applicationId "com.attendancesystemapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 6
-        versionName "1.0"
+        versionCode 7
+        versionName "1.0.1"
+
+        // Ensure any app-level native builds use 16 KB ELF alignment
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // Required for 16 KB devices with AGP 8.5.1+: keep libs uncompressed + properly aligned
+            useLegacyPackaging = false
+        }
     }
     signingConfigs {
           release {

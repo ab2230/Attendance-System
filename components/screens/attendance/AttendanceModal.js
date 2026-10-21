@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, Modal, Animated, Dimensions, Easing, TextInput } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, Modal, Animated, Dimensions, Easing, TextInput, Alert } from 'react-native';
 import React, { useState, useContext, useEffect, useRef, useMemo } from 'react';
 import { MemberContext } from '../../context/MemberContext';
 import { ProgramContext } from '../../context/ProgramContext';
@@ -195,54 +195,81 @@ const AttendanceModal = ({ visible, onClose }) => {
     return arrival > start;
   };
 
-  const handleSaveAttendance = async () => {
+  const markedIds = useMemo(
+    () => new Set(attendance.map((record) => record.memberId)),
+    [attendance]
+  );
+
+  const unmarkedMembers = useMemo(
+    () => filteredMembers.filter((member) => !markedIds.has(member.id)),
+    [filteredMembers, markedIds]
+  );
+
+  const presentCount = attendance.filter((record) => record.status === 'Present').length;
+  const absentCount = attendance.filter((record) => record.status === 'Absent').length;
+  const allMarkedArePresent = attendance.length > 0 && absentCount === 0;
+  const allMarkedAreAbsent = attendance.length > 0 && presentCount === 0;
+  const canMarkRemainingAbsent = allMarkedArePresent && unmarkedMembers.length > 0;
+  const canMarkRemainingPresent = allMarkedAreAbsent && unmarkedMembers.length > 0;
+
+  const markRemainingAs = (status) => {
+    if (!unmarkedMembers.length) return;
+    const nowTime = new Date().toTimeString().slice(0, 5);
+    const newRecords = unmarkedMembers.map((member) => ({
+      memberId: member.id,
+      status,
+      arrivalTime: status === 'Present' ? nowTime : null,
+    }));
+    setAttendance((prev) => [...prev, ...newRecords]);
+  };
+
+  const buildFinalAttendance = (sourceAttendance) => {
+    const byId = new Map(sourceAttendance.map((record) => [record.memberId, record]));
+    unmarkedMembers.forEach((member) => {
+      if (!byId.has(member.id)) {
+        byId.set(member.id, {
+          memberId: member.id,
+          status: 'Absent',
+          arrivalTime: null,
+        });
+      }
+    });
+    return Array.from(byId.values());
+  };
+
+  const performSaveAttendance = async (finalAttendance) => {
     if (localLoading || attendanceLoading) return;
 
     try {
-      // Validation
-      if (!selectedProgramId) {
-        setError('Please select a program');
-        setShowErrorModal(true);
-        return;
-      }
-      
-      if (attendance.length === 0) {
-        setError('Please mark attendance for at least one student');
-        setShowErrorModal(true);
-        return;
-      }
-      
       setLocalLoading(true);
       setError(null);
-      
+
       const selectedProgram = programs.find((p) => p.id === selectedProgramId);
       const attendanceRecord = {
         date: selectedDate.toISOString(),
         programId: selectedProgramId,
         classStartTime: classStartTime.toTimeString().slice(0, 5),
         maxLateMinutes: selectedProgram?.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES,
-        members: attendance.map((att) => {
+        members: finalAttendance.map((att) => {
           const member = members.find((m) => m.id === att.memberId);
           return {
             memberId: att.memberId,
             status: att.status,
             classId: member?.classId,
             arrivalTime: att.arrivalTime,
-            isLate: att.arrivalTime ? isLate(att.arrivalTime) : false
+            isLate: att.arrivalTime ? isLate(att.arrivalTime) : false,
           };
         }),
-        id: "Attendance" + Date.now().toString(),
+        id: 'Attendance' + Date.now().toString(),
       };
-      
+
       await saveAttendanceRecord(attendanceRecord);
 
-      // Keep recently marked students at the top for next session
-      const markedOrder = attendance.map((att) => att.memberId);
+      const markedOrder = finalAttendance.map((att) => att.memberId);
       await bumpProgramMemberOrder(selectedProgramId, markedOrder);
       const refreshedOrder = await getProgramMemberOrder(selectedProgramId);
       setMemberOrderIds(refreshedOrder);
-      
-      // Reset form
+
       setAttendance([]);
       setSelectedProgramId(null);
       setFilterMemberType('all');
@@ -250,7 +277,6 @@ const AttendanceModal = ({ visible, onClose }) => {
       setSearchOpen(false);
       setProgramName('');
       onClose();
-      
     } catch (error) {
       console.error('Error saving attendance:', error);
       setError(error.message || 'Failed to save attendance. Please try again.');
@@ -258,6 +284,45 @@ const AttendanceModal = ({ visible, onClose }) => {
     } finally {
       setLocalLoading(false);
     }
+  };
+
+  const handleSaveAttendance = async () => {
+    if (localLoading || attendanceLoading) return;
+
+    if (!selectedProgramId) {
+      setError('Please select a program');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (attendance.length === 0) {
+      setError('Please mark attendance for at least one student');
+      setShowErrorModal(true);
+      return;
+    }
+
+    const remainingCount = unmarkedMembers.length;
+    if (remainingCount > 0) {
+      Alert.alert(
+        'Save Attendance',
+        `${remainingCount} unmarked student${remainingCount === 1 ? '' : 's'} will automatically be recorded as Absent. Continue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Save',
+            style: 'destructive',
+            onPress: () => {
+              const finalAttendance = buildFinalAttendance(attendance);
+              setAttendance(finalAttendance);
+              performSaveAttendance(finalAttendance);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    await performSaveAttendance(attendance);
   };
 
   const onCancel = () => {
@@ -532,6 +597,53 @@ const AttendanceModal = ({ visible, onClose }) => {
                     Mark Attendance
                     {selectedProgramId ? ` (${displayedMembers.length})` : ''}
                   </Text>
+
+                  {attendance.length > 0 && (
+                    <Text style={styles.markSummary}>
+                      Marked: {presentCount} Present · {absentCount} Absent
+                      {unmarkedMembers.length > 0 ? ` · ${unmarkedMembers.length} Unmarked` : ''}
+                    </Text>
+                  )}
+
+                  {canMarkRemainingAbsent && (
+                    <TouchableOpacity
+                      style={styles.bulkActionButton}
+                      onPress={() => markRemainingAs('Absent')}
+                      activeOpacity={0.8}
+                    >
+                      <LinearGradient
+                        colors={['#ff6b6b', '#ff4545']}
+                        style={styles.bulkActionGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        <Icon name="person-off" size={18} color="white" />
+                        <Text style={styles.bulkActionText}>
+                          Mark remaining ({unmarkedMembers.length}) as Absent
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
+
+                  {canMarkRemainingPresent && (
+                    <TouchableOpacity
+                      style={styles.bulkActionButton}
+                      onPress={() => markRemainingAs('Present')}
+                      activeOpacity={0.8}
+                    >
+                      <LinearGradient
+                        colors={['#43e97b', '#38f9d7']}
+                        style={styles.bulkActionGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        <Icon name="how-to-reg" size={18} color="white" />
+                        <Text style={styles.bulkActionText}>
+                          Mark remaining ({unmarkedMembers.length}) as Present
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
                 </View>
               }
               ListEmptyComponent={
@@ -772,8 +884,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#343a40',
-    marginBottom: 15,
+    marginBottom: 8,
     marginTop: 10,
+  },
+  markSummary: {
+    fontSize: 13,
+    color: '#6c757d',
+    marginBottom: 10,
+  },
+  bulkActionButton: {
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+  },
+  bulkActionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 8,
+  },
+  bulkActionText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   memberCard: {
     flexDirection: 'row',
