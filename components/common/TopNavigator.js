@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AppTheme from '../theme/appTheme';
 
 const TopNavigator = ({ title, backButton = false, uploadTrue=false, importing, handleImport }) => {
   const {i18n, t} = useTranslation(); // Get translation functions
@@ -54,7 +55,7 @@ const TopNavigator = ({ title, backButton = false, uploadTrue=false, importing, 
 const styles = StyleSheet.create({
   container: {
     height: 60,
-    backgroundColor: "#162447",
+    backgroundColor: AppTheme.header,
     flexDirection: "row",
     alignItems: "center",
     elevation: 4,
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "white",
+    color: AppTheme.accent,
     padding:10
   },
   languageContainer: {

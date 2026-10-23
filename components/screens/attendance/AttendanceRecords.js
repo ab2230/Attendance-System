@@ -4,6 +4,7 @@ import AttendanceRecordsScreen from './AttendanceRecordsScreen';
 import AttendanceSummaryScreen from './AttendanceSummaryScreen';
 import TopNavigator from '../../common/TopNavigator';
 import { color, textStyles } from '../../styles/Styles';
+import AppTheme from '../../theme/appTheme';
 import { scale } from '../../styles/scaling';
 
 const AttendanceRecords = () => {
@@ -54,7 +55,7 @@ export default AttendanceRecords;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: AppTheme.background,
   },
   tabSection: {
     flex: 1, // give space to tabs + content
@@ -66,7 +67,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: color.deepLightGray,
+    borderBottomColor: AppTheme.border,
     paddingVertical: 8,
   },
   tabButton: (isActive) => ({
@@ -74,10 +75,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     width: 100,
     alignItems: 'center',
-    borderBottomColor: color.primary,
+    borderBottomColor: AppTheme.accent,
   }),
   tabButtonText: (isActive) => ({
-    color: isActive ? color.primary : color.gray,
+    color: isActive ? AppTheme.accent : AppTheme.textMuted,
     fontSize: scale(13),
   }),
   contentContainer: {

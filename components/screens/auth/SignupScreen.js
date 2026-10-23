@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import AppTheme from '../../theme/appTheme';
 
 const SignupScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -23,7 +24,6 @@ const SignupScreen = ({ navigation }) => {
 
     try {
       await signUp(email, password, firstName, lastName);
-      // Navigate to verification screen with user's email
       navigation.navigate('Verification', { email });
     } catch (error) {
       const errorMsg = error.message || 'Signup failed';
@@ -39,44 +39,44 @@ const SignupScreen = ({ navigation }) => {
       <View style={styles.innerContainer}>
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Join us to get started</Text>
-        
+
         <TextInput
           style={styles.input}
           placeholder="First Name"
-          placeholderTextColor="#999"
+          placeholderTextColor={AppTheme.placeholder}
           value={firstName}
           onChangeText={setFirstName}
           autoCapitalize="words"
         />
-        
+
         <TextInput
           style={styles.input}
           placeholder="Last Name"
-          placeholderTextColor="#999"
+          placeholderTextColor={AppTheme.placeholder}
           value={lastName}
           onChangeText={setLastName}
           autoCapitalize="words"
         />
-        
+
         <TextInput
           style={styles.input}
           placeholder="Email"
-          placeholderTextColor="#999"
+          placeholderTextColor={AppTheme.placeholder}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        
+
         <TextInput
           style={styles.input}
           placeholder="Password (min 6 characters)"
-          placeholderTextColor="#999"
+          placeholderTextColor={AppTheme.placeholder}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
-        
+
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleSignup}
@@ -86,7 +86,7 @@ const SignupScreen = ({ navigation }) => {
             {loading ? 'Creating Account...' : 'Sign Up'}
           </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity onPress={() => navigation.navigate('Signin')}>
           <Text style={styles.linkText}>
             Already have an account? <Text style={styles.link}>Sign In</Text>
@@ -100,7 +100,7 @@ const SignupScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: AppTheme.background,
   },
   innerContainer: {
     flex: 1,
@@ -110,67 +110,51 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#2c3e50',
+    color: AppTheme.accent,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#7f8c8d',
+    color: AppTheme.textSoft,
     marginBottom: 30,
     textAlign: 'center',
   },
   input: {
     height: 50,
-    backgroundColor: '#fff',
-    borderColor: '#dfe6e9',
+    backgroundColor: AppTheme.inputBg,
+    borderColor: AppTheme.border,
     borderWidth: 1,
     marginBottom: 20,
     paddingHorizontal: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     fontSize: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-    color: 'black',
+    color: AppTheme.inputText,
   },
   button: {
-    backgroundColor: '#3498db',
+    backgroundColor: AppTheme.accent,
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#2980b9',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
   },
   buttonDisabled: {
-    backgroundColor: '#bdc3c7',
+    opacity: 0.6,
   },
   buttonText: {
-    color: 'white',
+    color: AppTheme.accentText,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   linkText: {
     marginTop: 25,
-    color: '#7f8c8d',
+    color: AppTheme.textMuted,
     textAlign: 'center',
     fontSize: 14,
   },
   link: {
-    color: '#3498db',
-    fontWeight: '600',
+    color: AppTheme.accent,
+    fontWeight: '700',
   },
 });
 

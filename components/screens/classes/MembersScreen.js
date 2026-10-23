@@ -15,6 +15,7 @@ import EmptyState from "../../common/EmptyState";
 import DeleteConfirmationModal from "../../common/DeleteConfirmationModal";
 import ImportGuideModal from "../../common/ImportGuideModal";
 import { DEFAULT_MEMBER_TYPE } from "../../constants/memberTypes";
+import AppTheme from "../../theme/appTheme";
 
 const MembersScreen = ({ route, navigation }) => {
   const { classId: initialClassId } = route.params;
@@ -139,7 +140,7 @@ const MembersScreen = ({ route, navigation }) => {
   }
 
   const refreshControl = (
-    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppTheme.accent} colors={[AppTheme.accent]} />
   );
 
   const renderHiddenItem = (data) => (
@@ -179,12 +180,7 @@ const MembersScreen = ({ route, navigation }) => {
   const renderItem = ({ item }) => (
     <Animated.View style={{ opacity: fadeAnim }}>
       <Card style={styles.card}>
-        <LinearGradient
-          colors={['#ffffff', '#f8f9fa']}
-          style={styles.cardContent}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
+        <View style={styles.cardContent}>
           <View style={styles.memberInfo}>
             <Text style={styles.cardText}>{item.firstName} {item.lastName}</Text>
             <Text style={styles.className}>
@@ -194,18 +190,13 @@ const MembersScreen = ({ route, navigation }) => {
           <View style={styles.typeBadge}>
             <Text style={styles.typeBadgeText}>{item.type || DEFAULT_MEMBER_TYPE}</Text>
           </View>
-        </LinearGradient>
+        </View>
       </Card>
     </Animated.View>
   );
 
   return (
-    <LinearGradient 
-      colors={['#f8f9fa', '#e9ecef']} 
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <View style={styles.container}>
       <TopNavigator 
         title="Members" 
         backButton={true} 
@@ -223,8 +214,8 @@ const MembersScreen = ({ route, navigation }) => {
       {loading && members.length === 0 ? (
         <LoadingScreen
           text="Loading members..."
-          backgroundColor="#f8f9fa"
-          color="#4da0b0"
+          backgroundColor={AppTheme.background}
+          color={AppTheme.accent}
         />
       ) : filteredMembers.length === 0 ? (
         <ScrollView
@@ -299,25 +290,31 @@ const MembersScreen = ({ route, navigation }) => {
         }} 
         style={styles.addButton}
       />
-    </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
+    backgroundColor: AppTheme.background,
   },
   listContent: {
     paddingBottom: 20,
   },
   card: {
     borderRadius: 12,
+    backgroundColor: 'transparent',
   },
   cardContent: {
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    borderRadius: 12,
   },
   memberInfo: {
     flex: 1,
@@ -325,16 +322,16 @@ const styles = StyleSheet.create({
   cardText: { 
     fontSize: 18, 
     fontWeight: '600',
-    color: '#343a40',
+    color: AppTheme.textPrimary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   className: {
     fontSize: 14,
-    color: '#6c757d',
+    color: AppTheme.textMuted,
   },
   typeBadge: {
-    backgroundColor: 'rgba(77, 160, 176, 0.15)',
+    backgroundColor: AppTheme.accentMuted,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -342,7 +339,7 @@ const styles = StyleSheet.create({
   typeBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#4da0b0',
+    color: AppTheme.accent,
   },
   rowBack: {
     alignItems: "center",
@@ -394,8 +391,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 30,
     right: 30,
-    backgroundColor: '#4da0b0',
-    shadowColor: '#4da0b0',
+    backgroundColor: AppTheme.accent,
+    shadowColor: AppTheme.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

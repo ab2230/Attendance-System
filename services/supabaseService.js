@@ -514,6 +514,139 @@ class SupabaseService {
     }
   }
 
+  generateRoomOtp() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
+
+  async createAttendanceRoom(programId, minuteLimit) {
+    try {
+      const user = await this.getCurrentUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const limit = Number(minuteLimit);
+      if (!limit || limit <= 0) {
+        throw new Error('Minute limit must be greater than zero');
+      }
+
+      const enrollments = await this.getProgramEnrollments(programId);
+      if (!enrollments.length) {
+        throw new Error('No students enrolled in this program');
+      }
+
+      const { data: programRow, error: programError } = await supabase
+        .from('programs')
+        .select('max_late_minutes')
+        .eq('id', programId)
+        .single();
+
+      if (programError) throw programError;
+
+      const now = new Date();
+      const classStartTime = now.toTimeString().slice(0, 8);
+      const members = enrollments.map((e) => ({
+        memberId: e.member_id,
+        status: 'Absent',
+        arrivalTime: null,
+        isLate: false,
+      }));
+
+      const { record } = await this.saveAttendanceRecord({
+        programId,
+        date: now,
+        classStartTime,
+        maxLateMinutes: programRow?.max_late_minutes ?? 60,
+        members,
+      });
+
+      const otpCode = this.generateRoomOtp();
+      const expiresAt = new Date(now.getTime() + limit * 60 * 1000).toISOString();
+
+      await supabase
+        .from('attendance_rooms')
+        .update({ expires_at: now.toISOString() })
+        .eq('program_id', programId)
+        .gt('expires_at', now.toISOString());
+
+      const { data: room, error: roomError } = await supabase
+        .from('attendance_rooms')
+        .insert([
+          {
+            user_id: user.id,
+            program_id: programId,
+            attendance_record_id: record.id,
+            otp_code: otpCode,
+            minute_limit: limit,
+            expires_at: expiresAt,
+          },
+        ])
+        .select('*, programs(name)')
+        .single();
+
+      if (roomError) throw roomError;
+
+      return {
+        ...room,
+        otpCode,
+      };
+    } catch (error) {
+      console.error('Create attendance room error:', error);
+      throw error;
+    }
+  }
+
+  async getActiveAttendanceRooms() {
+    try {
+      const { data, error } = await supabase
+        .from('attendance_rooms')
+        .select('*, programs(name)')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Get active attendance rooms error:', error);
+      throw error;
+    }
+  }
+
+  async getAttendanceRoomCheckIns(attendanceRecordId) {
+    try {
+      const { data, error } = await supabase
+        .from('attendance_entries')
+        .select('member_id, status, arrival_time, members(first_name, last_name)')
+        .eq('attendance_record_id', attendanceRecordId)
+        .eq('status', 'Present');
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Get attendance room check-ins error:', error);
+      throw error;
+    }
+  }
+
+  async getAttendanceRoomEntries(attendanceRecordId) {
+    try {
+      const { data, error } = await supabase
+        .from('attendance_entries')
+        .select('id, member_id, status, arrival_time, is_late, members(first_name, last_name)')
+        .eq('attendance_record_id', attendanceRecordId)
+        .order('status', { ascending: true });
+
+      if (error) throw error;
+      const rows = data || [];
+      return rows.sort((a, b) => {
+        const nameA = `${a.members?.first_name || ''} ${a.members?.last_name || ''}`.trim();
+        const nameB = `${b.members?.first_name || ''} ${b.members?.last_name || ''}`.trim();
+        return nameA.localeCompare(nameB);
+      });
+    } catch (error) {
+      console.error('Get attendance room entries error:', error);
+      throw error;
+    }
+  }
+
   // Utility methods
   async syncLocalDataToSupabase(localData) {
     try {

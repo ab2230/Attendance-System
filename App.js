@@ -40,8 +40,8 @@ const AppNavigator = () => {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <LoadingScreen />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0f24' }}>
+        <LoadingScreen backgroundColor="#0a0f24" color="#ffcc00" />
       </View>
     );
   }

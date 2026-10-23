@@ -6,6 +6,7 @@ import { scale } from '../../styles/scaling';
 import ClassScreen from './ClassScreen';
 import ProgramList from './ProgramList';
 import { useTranslation } from 'react-i18next';
+import AppTheme from '../../theme/appTheme';
 
 const ClassAndProgram = ({navigation}) => {
   const { t } = useTranslation();
@@ -75,22 +76,16 @@ export default ClassAndProgram
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa'
+    backgroundColor: AppTheme.background,
   },
   contentContainer: {
     flex: 1,
   },
   tabContainer: {
-    backgroundColor: 'white',
+    backgroundColor: AppTheme.surface,
     padding: scale(4),
-    shadowColor: color.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: AppTheme.border,
   },
   tabsWrapper: {
     flexDirection: 'row',
@@ -105,30 +100,22 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     fontSize: scale(14),
-    color: color.gray,
+    color: AppTheme.textMuted,
     letterSpacing: 0.5,
   },
   activeTabText: {
-    color: color.primary,
+    color: AppTheme.accent,
   },
   activeIndicator: {
     position: 'absolute',
     bottom: 0,
     width: '50%',
     height: 3,
-    backgroundColor: color.primary,
+    backgroundColor: AppTheme.accent,
     borderRadius: 3,
   },
   tabContent: {
     flex: 1,
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    backgroundColor: AppTheme.background,
   },
 });

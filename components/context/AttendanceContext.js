@@ -13,9 +13,11 @@ export const AttendanceProvider = ({ children }) => {
     loadAttendanceRecords();
   }, []);
 
-  const loadAttendanceRecords = async () => {
+  const loadAttendanceRecords = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
       const records = await supabaseService.getAttendanceRecords();
       
@@ -108,17 +110,13 @@ export const AttendanceProvider = ({ children }) => {
 
   const deleteAttendance = async (recordToDelete) => {
     try {
-      setLoading(true);
       setError(null);
-      
       await supabaseService.deleteAttendanceRecord(recordToDelete.id);
-      await loadAttendanceRecords(); // Reload to get updated data
+      await loadAttendanceRecords({ silent: true });
     } catch (error) {
       console.error("Error deleting attendance:", error);
       setError(error.message);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 

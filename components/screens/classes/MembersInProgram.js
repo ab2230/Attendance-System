@@ -9,6 +9,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { Card } from "react-native-paper";
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LoadingScreen from "../../common/LoadingScreen";
+import AppTheme from "../../theme/appTheme";
 
 const MembersInProgram = ({ route, navigation }) => {
   const { programId } = route.params;
@@ -73,12 +74,7 @@ const MembersInProgram = ({ route, navigation }) => {
     return (
       <Animated.View style={{ opacity: fadeAnim }}>
         <Card style={styles.card}>
-          <LinearGradient
-            colors={['#ffffff', '#f8f9fa']}
-            style={styles.cardContent}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
+          <View style={styles.cardContent}>
             <View style={styles.studentInfo}>
               <Text style={styles.studentName}>{item.firstName} {item.lastName}</Text>
               <Text style={styles.programName}>
@@ -92,18 +88,18 @@ const MembersInProgram = ({ route, navigation }) => {
               disabled={!!unenrollingId}
             >
               <LinearGradient
-                colors={isUnenrolling || unenrollingId ? ['#e9ecef', '#dee2e6'] : ['#ff6b6b', '#ff4545']}
+                colors={isUnenrolling || unenrollingId ? ['#3a4563', '#2a3550'] : ['#ff6b6b', '#ff4545']}
                 style={styles.gradientButton}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Icon name="person-remove" size={20} color={isUnenrolling || unenrollingId ? '#6c757d' : 'white'} />
+                <Icon name="person-remove" size={20} color={isUnenrolling || unenrollingId ? AppTheme.textMuted : 'white'} />
                 <Text style={[styles.unenrollText, (isUnenrolling || unenrollingId) && styles.disabledText]}>
                   {isUnenrolling ? '...' : 'Unenroll'}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
-          </LinearGradient>
+          </View>
         </Card>
       </Animated.View>
     );
@@ -111,24 +107,19 @@ const MembersInProgram = ({ route, navigation }) => {
 
   if ((programsLoading || membersLoading) && !program) {
     return (
-      <LinearGradient colors={['#f8f9fa', '#e9ecef']} style={styles.container}>
+      <View style={styles.container}>
         <TopNavigator title="Enrolled Students" backButton={true} navigation={navigation} />
         <LoadingScreen
           text="Loading students..."
-          backgroundColor="#f8f9fa"
-          color="#4da0b0"
+          backgroundColor={AppTheme.background}
+          color={AppTheme.accent}
         />
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient 
-      colors={['#f8f9fa', '#e9ecef']} 
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <View style={styles.container}>
       <TopNavigator title="Enrolled Students" backButton={true} navigation={navigation} />
 
       <FlatList
@@ -137,7 +128,7 @@ const MembersInProgram = ({ route, navigation }) => {
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppTheme.accent} colors={[AppTheme.accent]} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -157,13 +148,14 @@ const MembersInProgram = ({ route, navigation }) => {
         onClick={() => setShowModal(true)} 
         style={styles.addButton}
       />
-    </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: AppTheme.background,
   },
   listContent: {
     paddingBottom: 20,
@@ -171,12 +163,17 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 12,
+    backgroundColor: 'transparent',
   },
   cardContent: {
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    borderRadius: 12,
   },
   studentInfo: {
     flex: 1,
@@ -184,13 +181,13 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#343a40',
+    color: AppTheme.textPrimary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   programName: {
     fontSize: 14,
-    color: '#6c757d',
+    color: AppTheme.textMuted,
   },
   unenrollButton: {
     borderRadius: 20,
@@ -210,7 +207,7 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   disabledText: {
-    color: '#6c757d',
+    color: AppTheme.textMuted,
   },
   emptyContainer: {
     flex: 1,
@@ -220,7 +217,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#6c757d',
+    color: AppTheme.textMuted,
   },
   separator: {
     height: 12,
@@ -229,8 +226,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 30,
     right: 30,
-    backgroundColor: '#4da0b0',
-    shadowColor: '#4da0b0',
+    backgroundColor: AppTheme.accent,
+    shadowColor: AppTheme.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from 'react-native-vector-icons';
+import AppTheme from '../../theme/appTheme';
 
 const VerificationScreen = ({ navigation, route }) => {
   const { email } = route.params || {};
@@ -9,22 +10,20 @@ const VerificationScreen = ({ navigation, route }) => {
     <View style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <Ionicons name="mail-outline" size={80} color="#3498db" />
+          <Ionicons name="mail-outline" size={80} color={AppTheme.accent} />
         </View>
-        
+
         <Text style={styles.title}>Verify Your Email</Text>
-        
-        <Text style={styles.message}>
-          We've sent a verification link to:
-        </Text>
-        
+
+        <Text style={styles.message}>We&apos;ve sent a verification link to:</Text>
+
         <Text style={styles.email}>{email}</Text>
-        
+
         <Text style={styles.instructions}>
-          Please check your email and click the verification link to activate your account. 
+          Please check your email and click the verification link to activate your account.
           Once verified, you can sign in to your account.
         </Text>
-        
+
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -32,7 +31,7 @@ const VerificationScreen = ({ navigation, route }) => {
           >
             <Text style={styles.primaryButtonText}>Go to Sign In</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => navigation.navigate('Signup')}
@@ -40,10 +39,10 @@ const VerificationScreen = ({ navigation, route }) => {
             <Text style={styles.secondaryButtonText}>Back to Sign Up</Text>
           </TouchableOpacity>
         </View>
-        
+
         <View style={styles.helpContainer}>
           <Text style={styles.helpText}>
-            Didn't receive the email? Check your spam folder or try signing up again.
+            Didn&apos;t receive the email? Check your spam folder or try signing up again.
           </Text>
         </View>
       </View>
@@ -54,7 +53,7 @@ const VerificationScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: AppTheme.background,
   },
   content: {
     flex: 1,
@@ -65,32 +64,34 @@ const styles = StyleSheet.create({
   iconContainer: {
     marginBottom: 30,
     padding: 20,
-    backgroundColor: '#ecf0f1',
+    backgroundColor: AppTheme.surface,
     borderRadius: 50,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#2c3e50',
+    color: AppTheme.textPrimary,
     marginBottom: 20,
     textAlign: 'center',
   },
   message: {
     fontSize: 16,
-    color: '#7f8c8d',
+    color: AppTheme.textSoft,
     textAlign: 'center',
     marginBottom: 10,
   },
   email: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#3498db',
+    color: AppTheme.accent,
     textAlign: 'center',
     marginBottom: 25,
   },
   instructions: {
     fontSize: 14,
-    color: '#7f8c8d',
+    color: AppTheme.textMuted,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 40,
@@ -101,35 +102,27 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   primaryButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: AppTheme.accent,
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     marginBottom: 15,
-    shadowColor: '#2980b9',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
   },
   primaryButtonText: {
-    color: 'white',
+    color: AppTheme.accentText,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#bdc3c7',
+    borderColor: AppTheme.border,
   },
   secondaryButtonText: {
-    color: '#7f8c8d',
+    color: AppTheme.textSecondary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -138,7 +131,7 @@ const styles = StyleSheet.create({
   },
   helpText: {
     fontSize: 12,
-    color: '#95a5a6',
+    color: AppTheme.textMuted,
     textAlign: 'center',
     lineHeight: 18,
   },

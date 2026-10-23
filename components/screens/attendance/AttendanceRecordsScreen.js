@@ -13,6 +13,7 @@ import { ClassContext } from "../../context/ClassContext";
 import { MemberContext } from "../../context/MemberContext";
 import { ProgramContext } from "../../context/ProgramContext";
 import { AttendanceContext } from "../../context/AttendanceContext";
+import AppTheme from "../../theme/appTheme";
 
 const AttendanceRecordsScreen = () => {
   const { attendanceRecords, loadAttendanceRecords } = useContext(AttendanceContext);
@@ -218,7 +219,7 @@ export default AttendanceRecordsScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F8FA",
+    backgroundColor: AppTheme.background,
     paddingHorizontal: 15,
     paddingTop: 20,
   },
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 6,
-    color: "#333",
+    color: AppTheme.textSecondary,
   },
   pickerBox: {
     flexDirection: "row",
@@ -248,25 +249,25 @@ const styles = StyleSheet.create({
     margin: 5,
   },
   selectedItem: {
-    backgroundColor: "#007AFF",
+    backgroundColor: AppTheme.accent,
   },
   pickerText: {
     color: "#333",
     fontSize: 15,
   },
   selectedText: {
-    color: "#fff",
+    color: AppTheme.accentText,
     fontWeight: "bold",
   },
   dateButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: AppTheme.accent,
     padding: 10,
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 15,
   },
   dateButtonText: {
-    color: "#fff",
+    color: AppTheme.accentText,
     fontSize: 16,
     fontWeight: "600",
   },

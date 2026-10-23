@@ -12,6 +12,7 @@ import { MemberContext } from "../../context/MemberContext";
 import EmptyState from "../../common/EmptyState";
 import DeleteConfirmationModal from "../../common/DeleteConfirmationModal";
 import LoadingScreen from "../../common/LoadingScreen";
+import AppTheme from "../../theme/appTheme";
 
 const ClassScreen = ({ navigation }) => {
   const {t} = useTranslation();
@@ -112,18 +113,13 @@ const ClassScreen = ({ navigation }) => {
           activeOpacity={0.7}
         >
           <Card style={styles.card}>
-            <LinearGradient
-              colors={['#ffffff', '#f8f9fa']}
-              style={styles.cardContent}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
+            <View style={styles.cardContent}>
               <Text style={styles.cardText}>{item.name}</Text>
               <View style={styles.memberCount}>
-                <Icon name="people" size={18} color="#6c757d" />
+                <Icon name="people" size={18} color={AppTheme.textMuted} />
                 <Text style={styles.memberCountText}>{memberCount}</Text>
               </View>
-            </LinearGradient>
+            </View>
           </Card>
         </TouchableOpacity>
       </Animated.View>
@@ -131,26 +127,21 @@ const ClassScreen = ({ navigation }) => {
   };
 
   const refreshControl = (
-    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppTheme.accent} colors={[AppTheme.accent]} />
   );
 
   if (loading && classes.length === 0) {
     return (
       <LoadingScreen
         text="Loading classes..."
-        backgroundColor="#f8f9fa"
-        color="#4da0b0"
+        backgroundColor="#0a0f24"
+        color={AppTheme.accent}
       />
     );
   }
 
   return (
-    <LinearGradient 
-      colors={['#f8f9fa', '#e9ecef']} 
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <View style={styles.container}>
       {classes.length === 0 ? (
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
@@ -212,43 +203,49 @@ const ClassScreen = ({ navigation }) => {
         }} 
         style={styles.addButton}
       />
-    </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
+    backgroundColor: AppTheme.background,
   },
   listContent: {
     paddingBottom: 20,
   },
   card: {
     borderRadius: 12,
+    backgroundColor: 'transparent',
   },
   cardContent: {
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    borderRadius: 12,
   },
   cardText: { 
     fontSize: 18, 
     fontWeight: '600',
-    color: '#343a40',
+    color: AppTheme.textPrimary,
     letterSpacing: 0.5,
   },
   memberCount: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(108, 117, 125, 0.1)',
+    backgroundColor: AppTheme.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
   },
   memberCountText: {
     marginLeft: 5,
-    color: '#6c757d',
+    color: AppTheme.textSoft,
     fontSize: 14,
   },
   rowBack: {
@@ -301,8 +298,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 30,
     right: 30,
-    backgroundColor: '#4da0b0',
-    shadowColor: '#4da0b0',
+    backgroundColor: AppTheme.accent,
+    shadowColor: AppTheme.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,

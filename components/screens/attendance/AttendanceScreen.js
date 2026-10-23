@@ -11,7 +11,6 @@ import { ProgramContext } from '../../context/ProgramContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import CustomDropDown from '../../common/CustomDropDown';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import LinearGradient from 'react-native-linear-gradient';
 import LoadingScreen from '../../common/LoadingScreen';
 import { MEMBER_TYPE_OPTIONS } from '../../constants/memberTypes';
 import {
@@ -21,6 +20,7 @@ import {
   DEFAULT_MAX_LATE_MINUTES,
 } from '../../utils/attendanceEditWindow';
 import { bumpProgramMemberOrder } from '../../utils/attendanceMemberOrder';
+import AppTheme from '../../theme/appTheme';
 
 const TYPE_FILTER_OPTIONS = [
   { id: 'all', name: 'All Types' },
@@ -59,6 +59,11 @@ const AttendanceScreen = () => {
     return memberObj ? `${memberObj.firstName} ${memberObj.lastName}` : "Unknown Member";
   };
 
+  const programDropdown = [
+    { name: 'All Programs', id: '' },
+    ...programs.map((p) => ({ name: p.name, id: p.id })),
+  ];
+
   const membersDropdown = [
     { name: "All Members", id: 0, classId: null },
     ...members.map((member) => ({
@@ -67,6 +72,19 @@ const AttendanceScreen = () => {
       classId: member.classId,
     })),
   ];
+
+  const hasActiveFilters =
+    filterProgram !== '' ||
+    (filterMember !== '' && filterMember !== 0) ||
+    filterMemberType !== 'all' ||
+    filterDate !== null;
+
+  const clearFilters = () => {
+    setFilterProgram('');
+    setFilterMember('');
+    setFilterMemberType('all');
+    setFilterDate(null);
+  };
 
   const filteredRecords = attendanceRecords.filter((record) => {
     const matchesProgram = filterProgram === "" || record.programId === filterProgram;
@@ -217,8 +235,8 @@ const AttendanceScreen = () => {
         <TopNavigator title="Attendance Records" />
         <LoadingScreen
           text="Loading attendance..."
-          backgroundColor="#f8f9fa"
-          color="#4da0b0"
+          backgroundColor={AppTheme.background}
+          color={AppTheme.accent}
         />
       </View>
     );
@@ -228,64 +246,60 @@ const AttendanceScreen = () => {
     <View style={styles.container}>
       <TopNavigator title="Attendance Records" />
 
-      {deleting && (
-        <LoadingScreen
-          overlay={true}
-          text="Deleting attendance..."
-          color="#4da0b0"
-        />
-      )}
-      
-      {/* Filters Section */}
-      <LinearGradient 
-        colors={['#f8f9fa', '#e9ecef']} 
-        style={styles.filterContainer}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
+      <View style={styles.filterContainer}>
+        <View style={styles.filterHeaderRow}>
+          <Text style={styles.filterTitle}>Filters</Text>
+          {hasActiveFilters ? (
+            <TouchableOpacity onPress={clearFilters} style={styles.clearFiltersBtn}>
+              <Icon name="filter-alt-off" size={18} color={AppTheme.accentText} />
+              <Text style={styles.clearFiltersText}>Clear all</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
         <CustomDropDown
           label="Select Program"
-          data={programs}
-          currentSelected={programs.find((prog) => prog.id === filterProgram)}
-          setSelected={(input) => setFilterProgram(input.id)}
-          containerStyle={styles.dropdown}
+          data={programDropdown}
+          PlaceHolders="All Programs"
+          currentSelected={programDropdown.find((prog) => prog.id === filterProgram)}
+          setSelected={(input) => setFilterProgram(input?.id ?? '')}
+          onDarkBackground
         />
-        
+
         <CustomDropDown
           label="Select Member"
           data={membersDropdown}
+          PlaceHolders="All Members"
           currentSelected={membersDropdown.find((mem) => mem.id === filterMember)}
-          setSelected={(input) => setFilterMember(input.id)}
-          containerStyle={styles.dropdown}
+          setSelected={(input) => setFilterMember(input?.id ?? '')}
+          onDarkBackground
         />
 
         <CustomDropDown
           label="Filter by Type"
           data={TYPE_FILTER_OPTIONS}
           currentSelected={TYPE_FILTER_OPTIONS.find((option) => option.id === filterMemberType)}
-          setSelected={(input) => setFilterMemberType(input.id)}
-          containerStyle={styles.dropdown}
+          setSelected={(input) => setFilterMemberType(input?.id ?? 'all')}
+          onDarkBackground
         />
-        
-        <TouchableOpacity 
-          onPress={() => setShowDatePicker(true)} 
+
+        <TouchableOpacity
+          onPress={() => setShowDatePicker(true)}
           style={styles.datePickerButton}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={['#ffffff', '#f1f3f5']}
-            style={styles.datePickerGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <Icon name="calendar-today" size={20} color="#6c757d" />
-            <Text style={styles.dateText}>
-              {filterDate ? filterDate.toLocaleDateString() : "Select Date"}
-            </Text>
-            <Icon name="chevron-right" size={20} color="#6c757d" />
-          </LinearGradient>
+          <Icon name="calendar-today" size={20} color={AppTheme.textMuted} />
+          <Text style={styles.dateText}>
+            {filterDate ? filterDate.toLocaleDateString() : 'Any date'}
+          </Text>
+          <Icon name="chevron-right" size={20} color={AppTheme.textMuted} />
         </TouchableOpacity>
-      </LinearGradient>
+        {filterDate ? (
+          <TouchableOpacity onPress={() => setFilterDate(null)} style={styles.clearDateBtn}>
+            <Text style={styles.clearDateText}>Clear date filter</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       {showDatePicker && (
         <DateTimePicker
@@ -303,14 +317,21 @@ const AttendanceScreen = () => {
       <ScrollView
         style={styles.scrollContainer}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4da0b0']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppTheme.accent} />
         }
       >
         {filteredRecords.length === 0 ? (
           <View style={styles.emptyState}>
-            <Icon name="event-note" size={50} color="#adb5bd" />
+            <Icon name="event-note" size={50} color={AppTheme.textMuted} />
             <Text style={styles.emptyText}>No attendance records found</Text>
-            <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+            <Text style={styles.emptySubText}>
+              {hasActiveFilters ? 'Try clearing or adjusting your filters' : 'Tap + to record attendance'}
+            </Text>
+            {hasActiveFilters ? (
+              <TouchableOpacity style={styles.emptyClearBtn} onPress={clearFilters}>
+                <Text style={styles.emptyClearBtnText}>Clear filters</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : (
           <View style={styles.listContainer}>
@@ -331,12 +352,7 @@ const AttendanceScreen = () => {
                   onPress={() => openRecordForEdit(record)}
                   activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    colors={['#ffffff', '#f8f9fa']}
-                    style={styles.recordCard}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
+                  <View style={styles.recordCard}>
                     <View style={styles.cardHeader}>
                       <View style={styles.headerLeft}>
                         <Text style={styles.recordDate}>
@@ -365,13 +381,17 @@ const AttendanceScreen = () => {
                         style={styles.deleteButton}
                         disabled={deleting}
                       >
-                        <Icon name="delete" size={20} color={deleting ? '#ffc9c9' : '#ff6b6b'} />
+                        {deleting ? (
+                          <Icon name="hourglass-empty" size={20} color={AppTheme.textMuted} />
+                        ) : (
+                          <Icon name="delete" size={20} color={AppTheme.danger} />
+                        )}
                       </TouchableOpacity>
                     </View>
                     
                     <View style={styles.cardBody}>
                       <View style={styles.infoRow}>
-                        <Icon name="class" size={16} color="#6c757d" />
+                        <Icon name="class" size={16} color={AppTheme.textMuted} />
                         <Text style={styles.recordText}>
                           {getProgramName(record.programId)}
                         </Text>
@@ -379,20 +399,20 @@ const AttendanceScreen = () => {
                       
                       <View style={styles.statsRow}>
                         <View style={styles.statItem}>
-                          <Icon name="check-circle" size={16} color="#43e97b" />
+                          <Icon name="check-circle" size={16} color={AppTheme.success} />
                           <Text style={styles.statText}>
                             {presentCount} Present
                           </Text>
                         </View>
                         <View style={styles.statItem}>
-                          <Icon name="cancel" size={16} color="#ff6b6b" />
+                          <Icon name="cancel" size={16} color={AppTheme.danger} />
                           <Text style={styles.statText}>
                             {absentCount} Absent
                           </Text>
                         </View>
                         {lateStudents.length > 0 && (
                           <View style={styles.statItem}>
-                            <Icon name="schedule" size={16} color="#ffa726" />
+                            <Icon name="schedule" size={16} color={AppTheme.warning} />
                             <Text style={[styles.statText, styles.lateText]}>
                               {lateStudents.length} Late
                             </Text>
@@ -420,7 +440,7 @@ const AttendanceScreen = () => {
                         </View>
                       )}
                     </View>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -456,41 +476,70 @@ const AttendanceScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: AppTheme.background,
   },
   filterContainer: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: AppTheme.border,
+    backgroundColor: AppTheme.surfaceElevated,
   },
-  dropdown: {
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    backgroundColor: '#ffffff',
-  },
-  datePickerButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  datePickerGradient: {
+  filterHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 15,
-    borderRadius: 12,
+    marginBottom: 12,
+  },
+  filterTitle: {
+    color: AppTheme.accent,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  clearFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: AppTheme.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  clearFiltersText: {
+    color: AppTheme.accentText,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: AppTheme.inputBg,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    marginTop: 4,
   },
   dateText: {
     fontSize: 16,
-    color: '#343a40',
+    color: AppTheme.inputText,
     marginHorizontal: 10,
     flex: 1,
+  },
+  clearDateBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+  clearDateText: {
+    color: AppTheme.accent,
+    fontSize: 13,
+    fontWeight: '600',
   },
   scrollContainer: {
     flex: 1,
     paddingHorizontal: 16,
+    paddingTop: 12,
   },
   emptyState: {
     justifyContent: 'center',
@@ -499,13 +548,25 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: '#6c757d',
+    color: AppTheme.textSecondary,
     marginTop: 16,
   },
   emptySubText: {
     fontSize: 14,
-    color: '#adb5bd',
+    color: AppTheme.textMuted,
     marginTop: 8,
+    textAlign: 'center',
+  },
+  emptyClearBtn: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: AppTheme.accent,
+  },
+  emptyClearBtnText: {
+    color: AppTheme.accentText,
+    fontWeight: '700',
   },
   listContainer: {
     paddingBottom: 20,
@@ -514,11 +575,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -532,21 +591,21 @@ const styles = StyleSheet.create({
   recordDate: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#343a40',
+    color: AppTheme.textPrimary,
   },
   classTime: {
     fontSize: 12,
-    color: '#6c757d',
+    color: AppTheme.textMuted,
     marginTop: 2,
   },
   editWindowText: {
     fontSize: 11,
-    color: '#4da0b0',
+    color: AppTheme.accent,
     marginTop: 4,
     fontWeight: '500',
   },
   editLockedText: {
-    color: '#adb5bd',
+    color: AppTheme.textMuted,
   },
   deleteButton: {
     padding: 6,
@@ -561,7 +620,7 @@ const styles = StyleSheet.create({
   },
   recordText: {
     fontSize: 14,
-    color: '#6c757d',
+    color: AppTheme.textSoft,
     marginLeft: 8,
   },
   statsRow: {
@@ -577,25 +636,25 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 14,
-    color: '#6c757d',
+    color: AppTheme.textSoft,
     marginLeft: 4,
   },
   lateText: {
-    color: '#ffa726',
+    color: AppTheme.warning,
     fontWeight: '500',
   },
   lateStudentsContainer: {
     marginTop: 12,
     padding: 10,
-    backgroundColor: '#fff3e0',
+    backgroundColor: 'rgba(255, 167, 38, 0.12)',
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#ffa726',
+    borderLeftColor: AppTheme.warning,
   },
   lateStudentsTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#e65100',
+    color: AppTheme.warning,
     marginBottom: 4,
   },
   lateStudentsList: {
@@ -605,11 +664,11 @@ const styles = StyleSheet.create({
   },
   lateStudentName: {
     fontSize: 12,
-    color: '#bf360c',
+    color: AppTheme.textSoft,
   },
   moreStudents: {
     fontSize: 12,
-    color: '#bf360c',
+    color: AppTheme.textMuted,
     fontStyle: 'italic',
   },
 });

@@ -312,7 +312,7 @@ const AttendanceSummaryScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: "#f8f9fa", padding: 16 },
+  mainContainer: { flex: 1, backgroundColor: "#0a0f24", padding: 16 },
   tableScroll: { marginTop: 16 },
   tableWrapper: {
     flexDirection: "row",

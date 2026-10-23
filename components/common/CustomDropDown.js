@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { color, textStyles } from '../styles/Styles';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { scale } from '../styles/scaling';
@@ -19,10 +19,26 @@ const CustomDropDown = ({
   innerLabel,
   signup,
   uneditableTextEntry = true,
-  required // Add the new required prop
+  required, // Add the new required prop
+  onDarkBackground = false,
 }) => {
   const [isDroped, setIsDroped] = useState(false);
   const [currentItem, setCurrentItem] = useState(currentSelected);
+
+  useEffect(() => {
+    setCurrentItem(currentSelected);
+  }, [currentSelected]);
+
+  const triggerBorder = onDarkBackground ? '#1f3460' : error ? color.red : color.deepLightGray;
+  const valueColor =
+    currentItem || currentSelected
+      ? onDarkBackground
+        ? '#0a0f24'
+        : color.black
+      : onDarkBackground
+        ? '#8892b0'
+        : color.textGray;
+  const labelColor = onDarkBackground ? '#ccd6f6' : undefined;
 
   function handleOnPress(item) {
     setSelected && setSelected(item);
@@ -48,6 +64,7 @@ const CustomDropDown = ({
                   marginVertical: 5,
                   marginLeft: 2,
                   fontSize: 14,
+                  ...(labelColor ? { color: labelColor } : {}),
                 },
               ]}
             >
@@ -76,10 +93,11 @@ const CustomDropDown = ({
         onPress={() => (uneditableTextEntry ? setIsDroped(!isDroped) : null)}
         style={{
           borderWidth: 1,
-          borderColor: error ? color.red : color.deepLightGray,
+          borderColor: triggerBorder,
           borderRadius: 10,
           paddingHorizontal: 10,
           justifyContent: 'center',
+          backgroundColor: color.white,
         }}
       >
         <View
@@ -101,15 +119,16 @@ const CustomDropDown = ({
             style={[
               textStyles.text_regular,
               {
-                color: currentItem || currentSelected ? color.black : color.textGray,
+                color: valueColor,
                 fontSize: 16,
+                flex: 1,
               },
             ]}
           >
             {innerLabel ? (
               <Text style={{ fontSize: scale(12), color: color.textGray }}>{innerLabel} </Text>
             ) : null}
-            {currentItem?.name || null}
+            {currentItem?.name || currentSelected?.name || PlaceHolders || null}
           </Text>
           <Ionicons
             style={{ transform: [{ rotate: isDroped ? '180deg' : '0deg' }] }}
