@@ -1,6 +1,24 @@
 import { supabase } from '../supabase-client';
+import { buildOwnerPermissions } from '../utils/organizationPermissions';
 
 class SupabaseService {
+  _activeOrganizationId = null;
+
+  setActiveOrganizationId(organizationId) {
+    this._activeOrganizationId = organizationId || null;
+  }
+
+  getActiveOrganizationId() {
+    return this._activeOrganizationId;
+  }
+
+  _requireOrgId() {
+    if (!this._activeOrganizationId) {
+      throw new Error('No active organization. Choose one in Profile.');
+    }
+    return this._activeOrganizationId;
+  }
+
   // Check if supabase is properly initialized
   _checkSupabaseConnection() {
     if (!supabase || !supabase.supabaseUrl || supabase.supabaseUrl === 'YOUR_SUPABASE_URL_HERE') {
@@ -112,9 +130,11 @@ class SupabaseService {
   async getClasses() {
     try {
       this._checkSupabaseConnection();
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('classes')
         .select('*')
+        .eq('organization_id', orgId)
         .order('name');
       
       if (error) throw error;
@@ -130,9 +150,10 @@ class SupabaseService {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
 
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('classes')
-        .insert([{ name, user_id: user.id }])
+        .insert([{ name, user_id: user.id, organization_id: orgId }])
         .select()
         .single();
       
@@ -178,9 +199,11 @@ class SupabaseService {
   // Members methods
   async getMembers() {
     try {
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('members_with_class')
         .select('*')
+        .eq('organization_id', orgId)
         .order('first_name');
       
       if (error) throw error;
@@ -196,6 +219,7 @@ class SupabaseService {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
 
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('members')
         .insert([{
@@ -203,7 +227,8 @@ class SupabaseService {
           last_name: lastName,
           class_id: classId,
           type: type || 'Regular',
-          user_id: user.id
+          user_id: user.id,
+          organization_id: orgId,
         }])
         .select()
         .single();
@@ -255,9 +280,11 @@ class SupabaseService {
   // Programs methods
   async getPrograms() {
     try {
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('programs')
         .select('*')
+        .eq('organization_id', orgId)
         .order('name');
       
       if (error) throw error;
@@ -273,12 +300,14 @@ class SupabaseService {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
 
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('programs')
         .insert([{
           name,
           max_late_minutes: Number(maxLateMinutes) || 60,
           user_id: user.id,
+          organization_id: orgId,
         }])
         .select()
         .single();
@@ -390,6 +419,7 @@ class SupabaseService {
   // Attendance methods
   async getAttendanceRecords() {
     try {
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('attendance_records')
         .select(`
@@ -400,6 +430,7 @@ class SupabaseService {
             members (first_name, last_name, class_id)
           )
         `)
+        .eq('organization_id', orgId)
         .order('date', { ascending: false });
       
       if (error) throw error;
@@ -416,10 +447,12 @@ class SupabaseService {
       if (!user) throw new Error('User not authenticated');
 
       // Create attendance record
+      const orgId = this._requireOrgId();
       const { data: record, error: recordError } = await supabase
         .from('attendance_records')
         .insert([{
           user_id: user.id,
+          organization_id: orgId,
           program_id: attendanceData.programId,
           date: new Date(attendanceData.date).toISOString().split('T')[0],
           class_start_time: attendanceData.classStartTime,
@@ -567,11 +600,13 @@ class SupabaseService {
         .eq('program_id', programId)
         .gt('expires_at', now.toISOString());
 
+      const orgId = this._requireOrgId();
       const { data: room, error: roomError } = await supabase
         .from('attendance_rooms')
         .insert([
           {
             user_id: user.id,
+            organization_id: orgId,
             program_id: programId,
             attendance_record_id: record.id,
             otp_code: otpCode,
@@ -596,9 +631,11 @@ class SupabaseService {
 
   async getActiveAttendanceRooms() {
     try {
+      const orgId = this._requireOrgId();
       const { data, error } = await supabase
         .from('attendance_rooms')
         .select('*, programs(name)')
+        .eq('organization_id', orgId)
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false });
 
@@ -645,6 +682,127 @@ class SupabaseService {
       console.error('Get attendance room entries error:', error);
       throw error;
     }
+  }
+
+  // Organization methods
+  async ensureUserOrganization() {
+    const { data, error } = await supabase.rpc('ensure_user_organization');
+    if (error) throw error;
+    return data;
+  }
+
+  async getMyOrganizations() {
+    const user = await this.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select(`
+        is_owner,
+        permissions,
+        organizations (id, name, created_at)
+      `)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    return (data || []).map((row) => ({
+      id: row.organizations?.id,
+      name: row.organizations?.name,
+      created_at: row.organizations?.created_at,
+      isOwner: row.is_owner,
+      permissions: row.permissions,
+    })).filter((o) => o.id);
+  }
+
+  async createOrganization(name) {
+    const user = await this.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new Error('Organization name is required');
+
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .insert([{ name: trimmed, created_by_user_id: user.id }])
+      .select()
+      .single();
+
+    if (orgError) throw orgError;
+
+    const { error: memberError } = await supabase
+      .from('organization_members')
+      .insert([{
+        organization_id: org.id,
+        user_id: user.id,
+        is_owner: true,
+        permissions: buildOwnerPermissions(),
+      }]);
+
+    if (memberError) throw memberError;
+    return org;
+  }
+
+  async updateOrganizationName(organizationId, name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new Error('Organization name is required');
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .update({ name: trimmed })
+      .eq('id', organizationId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async inviteOrganizationMember(organizationId, email, permissions) {
+    const { data, error } = await supabase.rpc('invite_organization_member', {
+      p_organization_id: organizationId,
+      p_email: email,
+      p_permissions: permissions,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async getOrganizationMembers(organizationId) {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select(`
+        user_id,
+        is_owner,
+        permissions,
+        profiles (email, first_name, last_name)
+      `)
+      .eq('organization_id', organizationId);
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getOrganizationInvitations(organizationId) {
+    const { data, error } = await supabase
+      .from('organization_invitations')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('status', 'pending');
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async removeOrganizationMember(organizationId, userId) {
+    const { error } = await supabase
+      .from('organization_members')
+      .delete()
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .eq('is_owner', false);
+
+    if (error) throw error;
   }
 
   // Utility methods

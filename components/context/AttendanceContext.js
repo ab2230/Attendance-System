@@ -1,17 +1,28 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useContext } from "react";
 import supabaseService from "../../services/supabaseService";
+import { OrganizationContext } from "./OrganizationContext";
 
 export const AttendanceContext = createContext();
 
 // AttendanceContext.js
 export const AttendanceProvider = ({ children }) => {
+  const { activeOrganization, reloadToken, loading: orgLoading } = useContext(OrganizationContext);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (orgLoading) {
+      setLoading(true);
+      return;
+    }
+    if (!activeOrganization?.id) {
+      setAttendanceRecords([]);
+      setLoading(false);
+      return;
+    }
     loadAttendanceRecords();
-  }, []);
+  }, [activeOrganization?.id, reloadToken, orgLoading]);
 
   const loadAttendanceRecords = async ({ silent = false } = {}) => {
     try {

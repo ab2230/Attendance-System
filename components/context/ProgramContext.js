@@ -1,16 +1,27 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useContext } from "react";
 import supabaseService from "../../services/supabaseService";
+import { OrganizationContext } from "./OrganizationContext";
 
 export const ProgramContext = createContext();
 
 export const ProgramProvider = ({ children }) => {
+  const { activeOrganization, reloadToken, loading: orgLoading } = useContext(OrganizationContext);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (orgLoading) {
+      setLoading(true);
+      return;
+    }
+    if (!activeOrganization?.id) {
+      setPrograms([]);
+      setLoading(false);
+      return;
+    }
     loadPrograms();
-  }, []);
+  }, [activeOrganization?.id, reloadToken, orgLoading]);
 
   const loadPrograms = async () => {
     try {

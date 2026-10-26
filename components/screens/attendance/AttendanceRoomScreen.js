@@ -18,6 +18,7 @@ import CustomDropDown from '../../common/CustomDropDown';
 import LoadingScreen from '../../common/LoadingScreen';
 import { ProgramContext } from '../../context/ProgramContext';
 import { AttendanceContext } from '../../context/AttendanceContext';
+import { OrganizationContext } from '../../context/OrganizationContext';
 import supabaseService from '../../../services/supabaseService';
 
 const DEFAULT_MINUTE_LIMIT = '15';
@@ -26,6 +27,7 @@ const AttendanceRoomScreen = () => {
   const navigation = useNavigation();
   const { programs, loading: programsLoading, loadPrograms } = useContext(ProgramContext);
   const { loadAttendanceRecords } = useContext(AttendanceContext);
+  const { activeOrganization, reloadToken, loading: orgLoading } = useContext(OrganizationContext);
 
   const [selectedProgramId, setSelectedProgramId] = useState('');
   const [minuteLimit, setMinuteLimit] = useState(DEFAULT_MINUTE_LIMIT);
@@ -42,6 +44,12 @@ const AttendanceRoomScreen = () => {
   );
 
   const loadRooms = useCallback(async () => {
+    if (!activeOrganization?.id) {
+      setActiveRooms([]);
+      setPresentCountByRecord({});
+      setLoadingRooms(false);
+      return;
+    }
     try {
       const rooms = await supabaseService.getActiveAttendanceRooms();
       setActiveRooms(rooms);
@@ -61,11 +69,13 @@ const AttendanceRoomScreen = () => {
     } finally {
       setLoadingRooms(false);
     }
-  }, []);
+  }, [activeOrganization?.id]);
 
   useEffect(() => {
+    if (orgLoading) return;
+    setLoadingRooms(true);
     loadRooms();
-  }, [loadRooms]);
+  }, [loadRooms, reloadToken, orgLoading]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);

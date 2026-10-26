@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,31 +8,94 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import TopNavigator from '../../common/TopNavigator';
 import { AuthContext } from '../../context/AuthContext';
+import { OrganizationContext } from '../../context/OrganizationContext';
 import { ClassContext } from '../../context/ClassContext';
 import { MemberContext } from '../../context/MemberContext';
 import { ProgramContext } from '../../context/ProgramContext';
 import { AttendanceContext } from '../../context/AttendanceContext';
 import AppTheme from '../../theme/appTheme';
+import OrganizationInviteModal from './OrganizationInviteModal';
+import supabaseService from '../../../services/supabaseService';
 
 const ProfileScreen = () => {
   const { user, signOut, loading } = useContext(AuthContext);
+  const {
+    organizations,
+    activeOrganization,
+    loading: orgLoading,
+    error: orgError,
+    setActiveOrganization,
+    refreshOrganizations,
+    createOrganization,
+    inviteMember,
+    can,
+  } = useContext(OrganizationContext);
   const { loadClasses } = useContext(ClassContext);
   const { loadMembers } = useContext(MemberContext);
   const { loadPrograms } = useContext(ProgramContext);
   const { loadAttendanceRecords } = useContext(AttendanceContext);
+
   const [profileLoading, setProfileLoading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [orgPickerVisible, setOrgPickerVisible] = useState(false);
+  const [createOrgVisible, setCreateOrgVisible] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [creatingOrg, setCreatingOrg] = useState(false);
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
 
   const displayName = user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || 'No email';
 
+  const loadTeam = useCallback(async () => {
+    if (!activeOrganization?.id || !can('organization', 'read')) {
+      setTeamMembers([]);
+      return;
+    }
+    try {
+      setTeamLoading(true);
+      const rows = await supabaseService.getOrganizationMembers(activeOrganization.id);
+      setTeamMembers(rows);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [activeOrganization?.id, can]);
+
+  useEffect(() => {
+    loadTeam();
+  }, [loadTeam]);
+
   const handleRefresh = async () => {
     if (profileLoading) return;
     setProfileLoading(true);
+    try {
+      await refreshOrganizations();
+      await Promise.all([
+        loadClasses(),
+        loadMembers(),
+        loadPrograms(),
+        loadAttendanceRecords({ silent: true }),
+      ]);
+      await loadTeam();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to refresh data. Please try again.');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleSelectOrg = async (orgId) => {
+    await setActiveOrganization(orgId);
+    setOrgPickerVisible(false);
     try {
       await Promise.all([
         loadClasses(),
@@ -40,11 +103,56 @@ const ProfileScreen = () => {
         loadPrograms(),
         loadAttendanceRecords({ silent: true }),
       ]);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to refresh data. Please try again.');
-    } finally {
-      setProfileLoading(false);
+      await loadTeam();
+    } catch (e) {
+      Alert.alert('Error', 'Could not load data for this organization.');
     }
+  };
+
+  const handleCreateOrg = async () => {
+    const name = newOrgName.trim();
+    if (!name || creatingOrg) return;
+    setCreatingOrg(true);
+    try {
+      await createOrganization(name);
+      setNewOrgName('');
+      setCreateOrgVisible(false);
+      await Promise.all([
+        loadClasses(),
+        loadMembers(),
+        loadPrograms(),
+        loadAttendanceRecords({ silent: true }),
+      ]);
+      await loadTeam();
+      Alert.alert('Organization created', `"${name}" is now active.`);
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Could not create organization.');
+    } finally {
+      setCreatingOrg(false);
+    }
+  };
+
+  const handleInviteSubmit = async (email, permissions) => {
+    const result = await inviteMember(email, permissions);
+    if (!result?.ok) {
+      const msg =
+        result?.error === 'forbidden'
+          ? 'You do not have permission to invite members.'
+          : result?.error === 'invalid_email'
+            ? 'Enter a valid email address.'
+            : result?.error === 'cannot_invite_self'
+              ? 'You cannot invite yourself.'
+              : result?.error || 'Invite failed.';
+      Alert.alert('Invite failed', msg);
+      throw new Error(msg);
+    }
+    await loadTeam();
+    Alert.alert(
+      'Invite sent',
+      result.status === 'pending'
+        ? 'They will join when they sign up with that email.'
+        : 'Member was added to your organization.',
+    );
   };
 
   const handleLogout = () => {
@@ -93,7 +201,10 @@ const ProfileScreen = () => {
 
   return (
     <View style={styles.wrapper}>
-      <TopNavigator title="Profile" />
+      <TopNavigator
+        title="Profile"
+        subtitle={activeOrganization?.name ? activeOrganization.name : undefined}
+      />
       <ScrollView
         style={styles.container}
         refreshControl={
@@ -106,6 +217,72 @@ const ProfileScreen = () => {
           </View>
           <Text style={styles.userName}>{displayName}</Text>
           <Text style={styles.userEmail}>{userEmail}</Text>
+        </View>
+
+        <View style={styles.profileSection}>
+          <Text style={styles.sectionTitle}>Organization</Text>
+          {orgError ? <Text style={styles.errorHint}>{orgError}</Text> : null}
+          {orgLoading ? (
+            <ActivityIndicator color={AppTheme.accent} style={{ marginVertical: 12 }} />
+          ) : (
+            <>
+              <TouchableOpacity style={styles.actionButton} onPress={() => setOrgPickerVisible(true)}>
+                <Icon name="office-building" size={20} color={AppTheme.accent} />
+                <View style={styles.actionTextBlock}>
+                  <Text style={styles.actionButtonTextInline}>Active organization</Text>
+                  <Text style={styles.actionSubtext}>
+                    {activeOrganization?.name || 'None selected'}
+                    {activeOrganization?.isOwner ? ' · Owner' : ''}
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={20} color={AppTheme.textMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionButton} onPress={() => setCreateOrgVisible(true)}>
+                <Icon name="plus-circle-outline" size={20} color={AppTheme.success} />
+                <Text style={styles.actionButtonText}>Create organization</Text>
+                <Icon name="chevron-right" size={20} color={AppTheme.textMuted} />
+              </TouchableOpacity>
+
+              {can('organization', 'update') ? (
+                <TouchableOpacity style={styles.actionButton} onPress={() => setInviteVisible(true)}>
+                  <Icon name="account-plus-outline" size={20} color="#9b59b6" />
+                  <Text style={styles.actionButtonText}>Invite teammate</Text>
+                  <Icon name="chevron-right" size={20} color={AppTheme.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+
+              {can('organization', 'read') && teamMembers.length > 0 ? (
+                <View style={styles.teamBlock}>
+                  <Text style={styles.teamTitle}>Team ({teamMembers.length})</Text>
+                  {teamLoading ? (
+                    <ActivityIndicator color={AppTheme.accent} size="small" />
+                  ) : (
+                    teamMembers.map((row) => {
+                      const profile = row.profiles;
+                      const label =
+                        profile?.email ||
+                        `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
+                        row.user_id?.slice(0, 8);
+                      return (
+                        <View key={row.user_id} style={styles.teamRow}>
+                          <Icon
+                            name={row.is_owner ? 'crown' : 'account'}
+                            size={18}
+                            color={row.is_owner ? AppTheme.accent : AppTheme.textMuted}
+                          />
+                          <Text style={styles.teamName}>{label}</Text>
+                          {row.is_owner ? (
+                            <Text style={styles.teamBadge}>Owner</Text>
+                          ) : null}
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
 
         <View style={styles.profileSection}>
@@ -152,6 +329,68 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal visible={orgPickerVisible} animationType="slide" transparent onRequestClose={() => setOrgPickerVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Switch organization</Text>
+            <ScrollView>
+              {organizations.map((org) => {
+                const active = org.id === activeOrganization?.id;
+                return (
+                  <TouchableOpacity
+                    key={org.id}
+                    style={[styles.orgRow, active && styles.orgRowActive]}
+                    onPress={() => handleSelectOrg(org.id)}
+                  >
+                    <Text style={styles.orgRowName}>{org.name}</Text>
+                    {active ? <Icon name="check-circle" size={22} color={AppTheme.accent} /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setOrgPickerVisible(false)}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={createOrgVisible} animationType="fade" transparent onRequestClose={() => setCreateOrgVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>New organization</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newOrgName}
+              onChangeText={setNewOrgName}
+              placeholder="Organization name"
+              placeholderTextColor={AppTheme.textMuted}
+              editable={!creatingOrg}
+            />
+            <TouchableOpacity
+              style={[styles.primaryBtn, creatingOrg && styles.primaryBtnDisabled]}
+              onPress={handleCreateOrg}
+              disabled={creatingOrg || !newOrgName.trim()}
+            >
+              {creatingOrg ? (
+                <ActivityIndicator color={AppTheme.background} />
+              ) : (
+                <Text style={styles.primaryBtnText}>Create</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setCreateOrgVisible(false)}>
+              <Text style={styles.modalCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <OrganizationInviteModal
+        visible={inviteVisible}
+        onClose={() => setInviteVisible(false)}
+        onSubmit={handleInviteSubmit}
+      />
     </View>
   );
 };
@@ -222,6 +461,11 @@ const styles = StyleSheet.create({
     color: AppTheme.accent,
     marginBottom: 15,
   },
+  errorHint: {
+    color: AppTheme.danger,
+    marginBottom: 8,
+    fontSize: 14,
+  },
   profileItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -257,17 +501,128 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: AppTheme.border,
   },
+  actionTextBlock: {
+    flex: 1,
+    marginLeft: 12,
+  },
   actionButtonText: {
     fontSize: 16,
     color: AppTheme.textPrimary,
     marginLeft: 12,
     flex: 1,
   },
+  actionButtonTextInline: {
+    fontSize: 16,
+    color: AppTheme.textPrimary,
+  },
+  actionSubtext: {
+    fontSize: 13,
+    color: AppTheme.textMuted,
+    marginTop: 2,
+    marginLeft: 0,
+  },
   logoutButton: {
     borderBottomWidth: 0,
   },
   logoutButtonText: {
     color: AppTheme.danger,
+  },
+  teamBlock: {
+    marginTop: 8,
+    paddingTop: 8,
+  },
+  teamTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AppTheme.textSoft,
+    marginBottom: 8,
+  },
+  teamRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    gap: 8,
+  },
+  teamName: {
+    flex: 1,
+    color: AppTheme.textPrimary,
+    fontSize: 14,
+  },
+  teamBadge: {
+    fontSize: 12,
+    color: AppTheme.accent,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: AppTheme.surface,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+    maxHeight: '70%',
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: AppTheme.accent,
+    marginBottom: 16,
+  },
+  orgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: AppTheme.border,
+  },
+  orgRowActive: {
+    backgroundColor: AppTheme.accentMuted,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
+  orgRowName: {
+    fontSize: 16,
+    color: AppTheme.textPrimary,
+    flex: 1,
+  },
+  modalClose: {
+    marginTop: 16,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  modalCloseText: {
+    color: AppTheme.textSoft,
+    fontSize: 16,
+  },
+  modalInput: {
+    backgroundColor: AppTheme.background,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: AppTheme.textPrimary,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  primaryBtn: {
+    backgroundColor: AppTheme.accent,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  primaryBtnDisabled: {
+    opacity: 0.6,
+  },
+  primaryBtnText: {
+    color: AppTheme.background,
+    fontWeight: '700',
+    fontSize: 16,
   },
 });
 

@@ -8,7 +8,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AppTheme from '../theme/appTheme';
 
-const TopNavigator = ({ title, backButton = false, uploadTrue=false, importing, handleImport }) => {
+const TopNavigator = ({ title, subtitle, backButton = false, uploadTrue=false, importing, handleImport }) => {
   const {i18n, t} = useTranslation(); // Get translation functions
   const navigation = useNavigation();
   const [selectedLanguage, setSelectedLanguage] = useState(
@@ -27,7 +27,10 @@ const TopNavigator = ({ title, backButton = false, uploadTrue=false, importing, 
         </TouchableOpacity>
       )}
       <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1}}>
-      <Text style={styles.title}>{title}</Text>
+      <View style={styles.titleBlock}>
+        <Text style={styles.title}>{title}</Text>
+        {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+      </View>
       {uploadTrue?null:<TouchableOpacity style={styles.languageContainer} onPress={() => onLanguageChange((selectedLanguage == 'en'? 'am' : 'en'))}>
          <Text style={{color: 'white'}}>{selectedLanguage == 'en'? "English" : "አማርኛ"}</Text>
         </TouchableOpacity>}
@@ -68,11 +71,20 @@ const styles = StyleSheet.create({
   backButton: {
     paddingLeft: 8,
   },
+  titleBlock: {
+    flexShrink: 1,
+    paddingVertical: 8,
+    paddingLeft: 10,
+  },
   title: {
     fontSize: 20,
     fontWeight: "bold",
     color: AppTheme.accent,
-    padding:10
+  },
+  subtitle: {
+    fontSize: 12,
+    color: AppTheme.textSoft,
+    marginTop: 2,
   },
   languageContainer: {
     alignItems: 'center',

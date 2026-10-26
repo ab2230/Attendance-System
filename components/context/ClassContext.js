@@ -1,16 +1,27 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useContext } from "react";
 import supabaseService from "../../services/supabaseService";
+import { OrganizationContext } from "./OrganizationContext";
 
 export const ClassContext = createContext();
 
 export const ClassProvider = ({ children }) => {
+  const { activeOrganization, reloadToken, loading: orgLoading } = useContext(OrganizationContext);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (orgLoading) {
+      setLoading(true);
+      return;
+    }
+    if (!activeOrganization?.id) {
+      setClasses([]);
+      setLoading(false);
+      return;
+    }
     loadClasses();
-  }, []);
+  }, [activeOrganization?.id, reloadToken, orgLoading]);
 
   const loadClasses = async () => {
     try {

@@ -1,17 +1,28 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useContext } from "react";
 import supabaseService from "../../services/supabaseService";
 import { DEFAULT_MEMBER_TYPE, normalizeMemberType } from "../constants/memberTypes";
+import { OrganizationContext } from "./OrganizationContext";
 
 export const MemberContext = createContext();
 
 export const MemberProvider = ({ children }) => {
+  const { activeOrganization, reloadToken, loading: orgLoading } = useContext(OrganizationContext);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (orgLoading) {
+      setLoading(true);
+      return;
+    }
+    if (!activeOrganization?.id) {
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
     loadMembers();
-  }, []);
+  }, [activeOrganization?.id, reloadToken, orgLoading]);
 
   const loadMembers = async () => {
     try {

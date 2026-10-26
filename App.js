@@ -11,6 +11,7 @@ import { MemberProvider } from './components/context/MemberContext';
 import { ProgramProvider } from './components/context/ProgramContext';
 import { AttendanceProvider } from './components/context/AttendanceContext';
 import { AuthProvider, AuthContext } from './components/context/AuthContext';
+import { OrganizationProvider } from './components/context/OrganizationContext';
 
 import './components/i18n';
 import { checkForUpdate } from './checkForUpdate';
@@ -60,15 +61,17 @@ const App = () => {
 
   return (
     <AuthProvider>
-      <ClassProvider>
-        <MemberProvider>
-          <ProgramProvider>
-            <AttendanceProvider>
-              <AppNavigator />
-            </AttendanceProvider>
-          </ProgramProvider>
-        </MemberProvider>
-      </ClassProvider>
+      <OrganizationProvider>
+        <ClassProvider>
+          <MemberProvider>
+            <ProgramProvider>
+              <AttendanceProvider>
+                <AppNavigator />
+              </AttendanceProvider>
+            </ProgramProvider>
+          </MemberProvider>
+        </ClassProvider>
+      </OrganizationProvider>
     </AuthProvider>
   );
 }
