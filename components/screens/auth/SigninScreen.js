@@ -1,7 +1,9 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
 import AppTheme from '../../theme/appTheme';
+import PasswordInput from '../../common/PasswordInput';
+import AuthScreenLayout from './AuthScreenLayout';
 
 const SigninScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -24,11 +26,7 @@ const SigninScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View style={styles.innerContainer}>
+    <AuthScreenLayout contentContainerStyle={styles.innerContainer}>
         <View style={styles.header}>
           <Text style={styles.title}>Attendance System</Text>
           <Text style={styles.subtitle}>Sign in to manage attendance</Text>
@@ -46,13 +44,12 @@ const SigninScreen = ({ navigation }) => {
             autoCorrect={false}
           />
 
-          <TextInput
-            style={styles.input}
+          <PasswordInput
+            variant="auth"
             placeholder="Password"
-            placeholderTextColor={AppTheme.placeholder}
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            containerStyle={{ marginBottom: 8 }}
           />
 
           <TouchableOpacity
@@ -79,18 +76,13 @@ const SigninScreen = ({ navigation }) => {
             <Text style={styles.footerLink}>Request Access</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+    </AuthScreenLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: AppTheme.background,
-  },
   innerContainer: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'space-between',
     paddingHorizontal: 30,
     paddingVertical: 40,

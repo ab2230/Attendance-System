@@ -1,7 +1,9 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
 import AppTheme from '../../theme/appTheme';
+import PasswordInput from '../../common/PasswordInput';
+import AuthScreenLayout from './AuthScreenLayout';
 
 const SignupScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -32,11 +34,7 @@ const SignupScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <View style={styles.innerContainer}>
+    <AuthScreenLayout contentContainerStyle={styles.innerContainer}>
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Join us to get started</Text>
 
@@ -68,13 +66,11 @@ const SignupScreen = ({ navigation }) => {
           autoCapitalize="none"
         />
 
-        <TextInput
-          style={styles.input}
+        <PasswordInput
+          variant="auth"
           placeholder="Password (min 6 characters)"
-          placeholderTextColor={AppTheme.placeholder}
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
         />
 
         <TouchableOpacity
@@ -92,18 +88,13 @@ const SignupScreen = ({ navigation }) => {
             Already have an account? <Text style={styles.link}>Sign In</Text>
           </Text>
         </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+    </AuthScreenLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: AppTheme.background,
-  },
   innerContainer: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 30,
   },

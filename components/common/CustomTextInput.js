@@ -1,5 +1,5 @@
 import {View, Text, TextInput, Pressable, TouchableOpacity} from 'react-native';
-import React from 'react';
+import React, { useState } from 'react';
 import {color, textStyles} from '../styles/Styles';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { scale } from '../styles/scaling';
@@ -33,6 +33,8 @@ const CustomTextInput = ({
   searchIcon,
   required // Add the new required prop
 }) => {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
   return (
     <View style={{marginBottom: scale(8)}}>
       {label && (
@@ -115,10 +117,23 @@ const CustomTextInput = ({
           color={color.textDark}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
-          secureTextEntry={secureTextEntry}
+          secureTextEntry={secureTextEntry && !passwordVisible}
           editable={uneditableTextEntry}
           showSoftInputOnFocus={keyboard == false ? false : true}
         />
+        {secureTextEntry ? (
+          <TouchableOpacity
+            onPress={() => setPasswordVisible((v) => !v)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ paddingHorizontal: 8 }}
+          >
+            <MaterialCommunityIcons
+              name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+              size={22}
+              color={color.grayDark}
+            />
+          </TouchableOpacity>
+        ) : null}
         <Text style={{color: color.gray, fontSize: 16, marginRight: 10}}>
           {lastPlaceholder}
         </Text>

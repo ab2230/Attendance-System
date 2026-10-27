@@ -21,6 +21,7 @@ import { ProgramContext } from '../../context/ProgramContext';
 import { AttendanceContext } from '../../context/AttendanceContext';
 import AppTheme from '../../theme/appTheme';
 import OrganizationInviteModal from './OrganizationInviteModal';
+import PasswordInput from '../../common/PasswordInput';
 import supabaseService from '../../../services/supabaseService';
 
 const ProfileScreen = () => {
@@ -54,6 +55,7 @@ const ProfileScreen = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordSectionOpen, setPasswordSectionOpen] = useState(false);
 
   const displayName = user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || 'No email';
@@ -348,57 +350,73 @@ const ProfileScreen = () => {
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.sectionTitle}>Change password</Text>
-          <Text style={styles.passwordHint}>
-            Enter your current password, then choose a new one (at least 6 characters).
-          </Text>
-          <Text style={styles.inputLabel}>Current password</Text>
-          <TextInput
-            style={styles.passwordInput}
-            value={oldPassword}
-            onChangeText={setOldPassword}
-            placeholder="Current password"
-            placeholderTextColor={AppTheme.textMuted}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!changingPassword}
-          />
-          <Text style={styles.inputLabel}>New password</Text>
-          <TextInput
-            style={styles.passwordInput}
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder="New password"
-            placeholderTextColor={AppTheme.textMuted}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!changingPassword}
-          />
-          <Text style={styles.inputLabel}>Confirm new password</Text>
-          <TextInput
-            style={styles.passwordInput}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            placeholder="New password again"
-            placeholderTextColor={AppTheme.textMuted}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!changingPassword}
-          />
           <TouchableOpacity
-            style={[styles.primaryBtn, styles.passwordSubmitBtn, changingPassword && styles.primaryBtnDisabled]}
-            onPress={handleChangePassword}
-            disabled={changingPassword}
+            style={styles.foldHeader}
+            onPress={() => {
+              setPasswordSectionOpen((open) => {
+                if (open) resetPasswordFields();
+                return !open;
+              });
+            }}
+            activeOpacity={0.7}
           >
-            {changingPassword ? (
-              <ActivityIndicator color={AppTheme.background} />
-            ) : (
-              <Text style={styles.primaryBtnText}>Update password</Text>
-            )}
+            <View style={styles.foldHeaderLeft}>
+              <Icon name="lock-reset" size={22} color={AppTheme.accent} />
+              <Text style={styles.sectionTitleInline}>Change password</Text>
+            </View>
+            <Icon
+              name={passwordSectionOpen ? 'chevron-up' : 'chevron-down'}
+              size={24}
+              color={AppTheme.textMuted}
+            />
           </TouchableOpacity>
+
+          {passwordSectionOpen ? (
+            <View style={styles.foldBody}>
+              <Text style={styles.passwordHint}>
+                Enter your current password, then choose a new one (at least 6 characters).
+              </Text>
+              <PasswordInput
+                variant="dark"
+                label="Current password"
+                placeholder="Current password"
+                value={oldPassword}
+                onChangeText={setOldPassword}
+                editable={!changingPassword}
+              />
+              <PasswordInput
+                variant="dark"
+                label="New password"
+                placeholder="New password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                editable={!changingPassword}
+              />
+              <PasswordInput
+                variant="dark"
+                label="Confirm new password"
+                placeholder="New password again"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                editable={!changingPassword}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.primaryBtn,
+                  styles.passwordSubmitBtn,
+                  changingPassword && styles.primaryBtnDisabled,
+                ]}
+                onPress={handleChangePassword}
+                disabled={changingPassword}
+              >
+                {changingPassword ? (
+                  <ActivityIndicator color={AppTheme.background} />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Update password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.actionsSection}>
@@ -720,28 +738,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  foldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  foldHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  sectionTitleInline: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: AppTheme.accent,
+  },
+  foldBody: {
+    marginTop: 16,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: AppTheme.border,
+  },
   passwordHint: {
     color: AppTheme.textMuted,
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 12,
-  },
-  inputLabel: {
-    color: AppTheme.textSoft,
-    fontSize: 14,
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  passwordInput: {
-    backgroundColor: AppTheme.background,
-    borderWidth: 1,
-    borderColor: AppTheme.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: AppTheme.textPrimary,
-    fontSize: 16,
-    marginBottom: 8,
   },
   passwordSubmitBtn: {
     marginTop: 8,

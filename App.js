@@ -4,7 +4,8 @@ import React, { useContext } from 'react';
 import { View } from "react-native";
 import TabNavigation from './components/tabNavigation';
 
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import AppTheme from './components/theme/appTheme';
 import { createStackNavigator } from '@react-navigation/stack';
 import { ClassProvider } from './components/context/ClassContext';
 import { MemberProvider } from './components/context/MemberContext';
@@ -22,8 +23,21 @@ import LoadingScreen from './components/common/LoadingScreen';
 
 const Stack = createStackNavigator();
 
+const navigationTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: AppTheme.background,
+  },
+};
+
+const authScreenOptions = {
+  headerShown: false,
+  cardStyle: { backgroundColor: AppTheme.background },
+};
+
 const AuthStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator screenOptions={authScreenOptions}>
     <Stack.Screen name="Signin" component={SigninScreen} />
     <Stack.Screen name="Signup" component={SignupScreen} />
     <Stack.Screen name="Verification" component={VerificationScreen} />
@@ -31,7 +45,7 @@ const AuthStack = () => (
 );
 
 const AppStack = () => (
-  <Stack.Navigator initialRouteName="Home" screenOptions={{ headerShown: false }}>
+  <Stack.Navigator initialRouteName="Home" screenOptions={authScreenOptions}>
     <Stack.Screen name="Home" component={TabNavigation} />  
   </Stack.Navigator>
 );
@@ -48,7 +62,7 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       {user ? <AppStack /> : <AuthStack />}
     </NavigationContainer>
   );
