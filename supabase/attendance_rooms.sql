@@ -233,7 +233,11 @@ BEGIN
     ELSE
         v_arrival := LOCALTIME;
     END IF;
-    v_is_late := v_ar.class_start_time IS NOT NULL AND v_arrival > v_ar.class_start_time;
+    v_is_late := v_ar.class_start_time IS NOT NULL
+        AND v_arrival > (
+            v_ar.class_start_time
+            + (COALESCE(v_ar.late_after_minutes, 0) * INTERVAL '1 minute')
+        );
 
     UPDATE public.attendance_entries
     SET

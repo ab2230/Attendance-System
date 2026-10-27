@@ -6,6 +6,7 @@ import ErrorModal from "../../common/ErrorModal";
 import LoadingScreen from "../../common/LoadingScreen";
 import { ProgramContext } from "../../context/ProgramContext";
 import { DEFAULT_MAX_LATE_MINUTES } from "../../utils/attendanceEditWindow";
+import { DEFAULT_LATE_AFTER_MINUTES } from "../../utils/attendanceLate";
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
@@ -21,6 +22,8 @@ const AddProgramModal = ({
   editingProgram,
   maxLateMinutes,
   setMaxLateMinutes,
+  lateAfterMinutes,
+  setLateAfterMinutes,
 }) => {
   const { addProgram, updateProgram, loading } = useContext(ProgramContext);
   const [localLoading, setLocalLoading] = useState(false);
@@ -35,8 +38,16 @@ const AddProgramModal = ({
         setMaxLateMinutes?.(
           String(editingProgram.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES)
         );
-      } else if (!maxLateMinutes) {
-        setMaxLateMinutes?.(String(DEFAULT_MAX_LATE_MINUTES));
+        setLateAfterMinutes?.(
+          String(editingProgram.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES)
+        );
+      } else {
+        if (!maxLateMinutes) {
+          setMaxLateMinutes?.(String(DEFAULT_MAX_LATE_MINUTES));
+        }
+        if (lateAfterMinutes == null || lateAfterMinutes === '') {
+          setLateAfterMinutes?.(String(DEFAULT_LATE_AFTER_MINUTES));
+        }
       }
 
       Animated.parallel([
@@ -85,6 +96,13 @@ const AddProgramModal = ({
         setShowErrorModal(true);
         return;
       }
+
+      const lateAfter = parseInt(String(lateAfterMinutes ?? '0').trim(), 10);
+      if (!Number.isFinite(lateAfter) || lateAfter < 0) {
+        setError('Late starts after must be 0 or more minutes (e.g. 30)');
+        setShowErrorModal(true);
+        return;
+      }
       
       setLocalLoading(true);
       setError(null);
@@ -92,6 +110,7 @@ const AddProgramModal = ({
       const programData = {
         name: programName.trim(),
         maxLateMinutes: lateMinutes,
+        lateAfterMinutes: lateAfter,
       };
       
       if (isEditing && editingProgram) {
@@ -103,6 +122,7 @@ const AddProgramModal = ({
       
       setProgramName('');
       setMaxLateMinutes?.(String(DEFAULT_MAX_LATE_MINUTES));
+      setLateAfterMinutes?.(String(DEFAULT_LATE_AFTER_MINUTES));
       onClose();
       
     } catch (error) {
@@ -166,6 +186,18 @@ const AddProgramModal = ({
             />
             <Text style={styles.helperText}>
               Attendance stays editable until class start time plus this many minutes. After that, edits are locked.
+            </Text>
+
+            <CustomTextInput 
+              label="Late starts after (minutes)"
+              input={String(lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES)}
+              placeholder="Eg: 30"
+              setInput={(value) => setLateAfterMinutes?.(value.replace(/[^0-9]/g, ''))}
+              keyboardType="numeric"
+              containerStyle={styles.inputField}
+            />
+            <Text style={styles.helperText}>
+              Arrivals within this many minutes after class start count as on time. After that, they are marked late (e.g. 30).
             </Text>
 
             <LoadingButton

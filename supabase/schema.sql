@@ -46,6 +46,7 @@ CREATE TABLE public.programs (
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
     max_late_minutes INTEGER NOT NULL DEFAULT 60 CHECK (max_late_minutes > 0),
+    late_after_minutes INTEGER NOT NULL DEFAULT 0 CHECK (late_after_minutes >= 0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -67,6 +68,7 @@ CREATE TABLE public.attendance_records (
     date DATE NOT NULL,
     class_start_time TIME NOT NULL,
     max_late_minutes INTEGER NOT NULL DEFAULT 60 CHECK (max_late_minutes > 0),
+    late_after_minutes INTEGER NOT NULL DEFAULT 0 CHECK (late_after_minutes >= 0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

@@ -299,7 +299,7 @@ class SupabaseService {
     }
   }
 
-  async addProgram(name, maxLateMinutes = 60) {
+  async addProgram(name, maxLateMinutes = 60, lateAfterMinutes = 0) {
     try {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
@@ -310,6 +310,7 @@ class SupabaseService {
         .insert([{
           name,
           max_late_minutes: Number(maxLateMinutes) || 60,
+          late_after_minutes: Math.max(0, Number(lateAfterMinutes) || 0),
           user_id: user.id,
           organization_id: orgId,
         }])
@@ -331,6 +332,12 @@ class SupabaseService {
       if (updates.maxLateMinutes != null || updates.max_late_minutes != null) {
         payload.max_late_minutes =
           Number(updates.maxLateMinutes ?? updates.max_late_minutes) || 60;
+      }
+      if (updates.lateAfterMinutes != null || updates.late_after_minutes != null) {
+        payload.late_after_minutes = Math.max(
+          0,
+          Number(updates.lateAfterMinutes ?? updates.late_after_minutes) || 0,
+        );
       }
 
       const { data, error } = await supabase
@@ -461,6 +468,7 @@ class SupabaseService {
           date: new Date(attendanceData.date).toISOString().split('T')[0],
           class_start_time: attendanceData.classStartTime,
           max_late_minutes: Number(attendanceData.maxLateMinutes) || 60,
+          late_after_minutes: Math.max(0, Number(attendanceData.lateAfterMinutes) || 0),
         }])
         .select()
         .single();
@@ -500,6 +508,11 @@ class SupabaseService {
           class_start_time: attendanceData.classStartTime,
           ...(attendanceData.maxLateMinutes != null
             ? { max_late_minutes: Number(attendanceData.maxLateMinutes) || 60 }
+            : {}),
+          ...(attendanceData.lateAfterMinutes != null
+            ? {
+                late_after_minutes: Math.max(0, Number(attendanceData.lateAfterMinutes) || 0),
+              }
             : {}),
         })
         .eq('id', recordId)
@@ -572,7 +585,7 @@ class SupabaseService {
 
       const { data: programRow, error: programError } = await supabase
         .from('programs')
-        .select('max_late_minutes')
+        .select('max_late_minutes, late_after_minutes')
         .eq('id', programId)
         .single();
 
@@ -592,6 +605,7 @@ class SupabaseService {
         date: now,
         classStartTime,
         maxLateMinutes: programRow?.max_late_minutes ?? 60,
+        lateAfterMinutes: programRow?.late_after_minutes ?? 0,
         members,
       });
 

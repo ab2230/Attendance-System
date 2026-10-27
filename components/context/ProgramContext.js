@@ -38,6 +38,7 @@ export const ProgramProvider = ({ children }) => {
               id: program.id,
               name: program.name,
               maxLateMinutes: program.max_late_minutes ?? 60,
+              lateAfterMinutes: program.late_after_minutes ?? 0,
               enrolledStudents: enrollments.map(e => e.member_id),
               created_at: program.created_at,
               updated_at: program.updated_at
@@ -48,6 +49,7 @@ export const ProgramProvider = ({ children }) => {
               id: program.id,
               name: program.name,
               maxLateMinutes: program.max_late_minutes ?? 60,
+              lateAfterMinutes: program.late_after_minutes ?? 0,
               enrolledStudents: [],
               created_at: program.created_at,
               updated_at: program.updated_at
@@ -75,7 +77,11 @@ export const ProgramProvider = ({ children }) => {
         typeof newProgram === 'string'
           ? 60
           : Number(newProgram.maxLateMinutes) || 60;
-      await supabaseService.addProgram(programName, maxLateMinutes);
+      const lateAfterMinutes =
+        typeof newProgram === 'string'
+          ? 0
+          : Math.max(0, Number(newProgram.lateAfterMinutes) || 0);
+      await supabaseService.addProgram(programName, maxLateMinutes, lateAfterMinutes);
       await loadPrograms();
     } catch (error) {
       console.error("Error adding program:", error);
@@ -94,6 +100,7 @@ export const ProgramProvider = ({ children }) => {
       await supabaseService.updateProgram(updatedProgram.id, {
         name: updatedProgram.name,
         maxLateMinutes: Number(updatedProgram.maxLateMinutes) || 60,
+        lateAfterMinutes: Math.max(0, Number(updatedProgram.lateAfterMinutes) || 0),
       });
       await loadPrograms();
     } catch (error) {

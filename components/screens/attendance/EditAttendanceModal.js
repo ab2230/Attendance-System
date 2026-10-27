@@ -13,6 +13,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { getAttendanceEditDeadline } from '../../utils/attendanceEditWindow';
+import { isArrivalLate } from '../../utils/attendanceLate';
 
 const { width } = Dimensions.get('window');
 
@@ -93,10 +94,11 @@ const EditAttendanceModal = ({
   };
 
   const isLate = (arrivalTime, classStartTime) => {
-    if (!arrivalTime || !classStartTime) return false;
-    const arrival = new Date(`2000-01-01T${arrivalTime}`);
-    const start = new Date(`2000-01-01T${classStartTime}`);
-    return arrival > start;
+    return isArrivalLate(
+      arrivalTime,
+      classStartTime,
+      localRecord?.lateAfterMinutes ?? 0,
+    );
   };
 
   const renderMemberItem = ({ item }) => {

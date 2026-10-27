@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import supabaseService from "../../services/supabaseService";
 import { OrganizationContext } from "./OrganizationContext";
+import { isArrivalLate, DEFAULT_LATE_AFTER_MINUTES } from "../utils/attendanceLate";
 
 export const AttendanceContext = createContext();
 
@@ -40,6 +41,7 @@ export const AttendanceProvider = ({ children }) => {
         programName: record.programs?.name || 'Unknown Program',
         classStartTime: record.class_start_time,
         maxLateMinutes: record.max_late_minutes ?? 60,
+        lateAfterMinutes: record.late_after_minutes ?? DEFAULT_LATE_AFTER_MINUTES,
         members: record.attendance_entries?.map(entry => ({
           memberId: entry.member_id,
           firstName: entry.members?.first_name || '',
@@ -71,6 +73,7 @@ export const AttendanceProvider = ({ children }) => {
         date: newRecord.date,
         classStartTime: newRecord.classStartTime,
         maxLateMinutes: Number(newRecord.maxLateMinutes) || 60,
+        lateAfterMinutes: Math.max(0, Number(newRecord.lateAfterMinutes) || 0),
         members: newRecord.members.map(member => ({
           memberId: member.memberId,
           status: member.status,
@@ -100,6 +103,7 @@ export const AttendanceProvider = ({ children }) => {
         date: updatedRecord.date,
         classStartTime: updatedRecord.classStartTime,
         maxLateMinutes: Number(updatedRecord.maxLateMinutes) || 60,
+        lateAfterMinutes: Math.max(0, Number(updatedRecord.lateAfterMinutes) || 0),
         members: updatedRecord.members.map(member => ({
           memberId: member.memberId,
           status: member.status,
@@ -132,14 +136,8 @@ export const AttendanceProvider = ({ children }) => {
   };
 
   // Helper function to check if a student is late
-  const isStudentLate = (arrivalTime, classStartTime) => {
-    if (!arrivalTime || !classStartTime) return false;
-    
-    const arrival = new Date(`2000-01-01T${arrivalTime}`);
-    const start = new Date(`2000-01-01T${classStartTime}`);
-    
-    return arrival > start;
-  };
+  const isStudentLate = (arrivalTime, classStartTime, lateAfterMinutes = DEFAULT_LATE_AFTER_MINUTES) =>
+    isArrivalLate(arrivalTime, classStartTime, lateAfterMinutes);
 
   // Helper function to get late students from a record
   const getLateStudents = (record, classStartTime = null) => {
@@ -147,11 +145,12 @@ export const AttendanceProvider = ({ children }) => {
     
     const startTime = classStartTime || record.classStartTime;
     if (!startTime) return [];
+    const lateAfter = record.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES;
 
     return record.members.filter(member => 
       member.status === 'Present' && 
       member.arrivalTime && 
-      isStudentLate(member.arrivalTime, startTime)
+      isStudentLate(member.arrivalTime, startTime, lateAfter)
     );
   };
 
@@ -161,11 +160,12 @@ export const AttendanceProvider = ({ children }) => {
     
     const startTime = classStartTime || record.classStartTime;
     if (!startTime) return record.members.filter(m => m.status === 'Present');
+    const lateAfter = record.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES;
 
     return record.members.filter(member => 
       member.status === 'Present' && 
       member.arrivalTime && 
-      !isStudentLate(member.arrivalTime, startTime)
+      !isStudentLate(member.arrivalTime, startTime, lateAfter)
     );
   };
 

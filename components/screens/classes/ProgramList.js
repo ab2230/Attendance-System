@@ -13,6 +13,7 @@ import DeleteConfirmationModal from "../../common/DeleteConfirmationModal";
 import LoadingScreen from "../../common/LoadingScreen";
 import AppTheme from "../../theme/appTheme";
 import { DEFAULT_MAX_LATE_MINUTES } from "../../utils/attendanceEditWindow";
+import { DEFAULT_LATE_AFTER_MINUTES } from "../../utils/attendanceLate";
 
 const ProgramList = ({navigation}) => {
   const { programs, deleteProgram, loadPrograms, loading } = useContext(ProgramContext);
@@ -22,6 +23,7 @@ const ProgramList = ({navigation}) => {
   const [programIdTobeDeleted, setProgramIdTobeDeleted] = useState(null);
   const [programName, setProgramName] = useState('');
   const [maxLateMinutes, setMaxLateMinutes] = useState(String(DEFAULT_MAX_LATE_MINUTES));
+  const [lateAfterMinutes, setLateAfterMinutes] = useState(String(DEFAULT_LATE_AFTER_MINUTES));
   const [showModal, setShowModal] = useState(false);
   const [editingProgram, setEditingProgram] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,6 +51,7 @@ const ProgramList = ({navigation}) => {
     setEditingProgram(item);
     setProgramName(item.name);
     setMaxLateMinutes(String(item.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES));
+    setLateAfterMinutes(String(item.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES));
     setShowModal(true);
   };
 
@@ -121,7 +124,8 @@ const ProgramList = ({navigation}) => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardText}>{item.name}</Text>
                 <Text style={styles.lateWindowText}>
-                  Edit window: {item.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES} min
+                  Edit window: {item.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES} min · Late after:{' '}
+                  {item.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES} min
                 </Text>
               </View>
               <View style={styles.memberCount}>
@@ -184,11 +188,14 @@ const ProgramList = ({navigation}) => {
         setProgramName={setProgramName}
         maxLateMinutes={maxLateMinutes}
         setMaxLateMinutes={setMaxLateMinutes}
+        lateAfterMinutes={lateAfterMinutes}
+        setLateAfterMinutes={setLateAfterMinutes}
         onClose={() => {
           setShowModal(false);
           setEditingProgram(null);
           setProgramName("");
           setMaxLateMinutes(String(DEFAULT_MAX_LATE_MINUTES));
+          setLateAfterMinutes(String(DEFAULT_LATE_AFTER_MINUTES));
         }}
         isEditing={!!editingProgram}
         editingProgram={editingProgram}
@@ -213,6 +220,7 @@ const ProgramList = ({navigation}) => {
           setEditingProgram(null);
           setProgramName('');
           setMaxLateMinutes(String(DEFAULT_MAX_LATE_MINUTES));
+          setLateAfterMinutes(String(DEFAULT_LATE_AFTER_MINUTES));
           setShowModal(true);
         }} 
         style={styles.addButton}

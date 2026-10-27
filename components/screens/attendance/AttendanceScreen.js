@@ -20,6 +20,7 @@ import {
   DEFAULT_MAX_LATE_MINUTES,
 } from '../../utils/attendanceEditWindow';
 import { bumpProgramMemberOrder } from '../../utils/attendanceMemberOrder';
+import { isArrivalLate } from '../../utils/attendanceLate';
 import AppTheme from '../../theme/appTheme';
 
 const TYPE_FILTER_OPTIONS = [
@@ -134,6 +135,7 @@ const AttendanceScreen = () => {
     return {
       ...record,
       maxLateMinutes: record.maxLateMinutes ?? program?.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES,
+      lateAfterMinutes: record.lateAfterMinutes ?? program?.lateAfterMinutes ?? 0,
       members: mergedMembers,
     };
   };
@@ -164,7 +166,11 @@ const AttendanceScreen = () => {
             ? (arrivalTime || member.arrivalTime || new Date().toTimeString().slice(0, 5))
             : null;
           if (!time || !selectedRecord.classStartTime) return false;
-          return new Date(`2000-01-01T${time}`) > new Date(`2000-01-01T${selectedRecord.classStartTime}`);
+          return isArrivalLate(
+            time,
+            selectedRecord.classStartTime,
+            selectedRecord.lateAfterMinutes ?? 0,
+          );
         })(),
       } : member
     );

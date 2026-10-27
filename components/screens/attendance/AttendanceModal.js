@@ -13,6 +13,7 @@ import { BlurView } from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { MEMBER_TYPE_OPTIONS } from '../../constants/memberTypes';
 import { DEFAULT_MAX_LATE_MINUTES } from '../../utils/attendanceEditWindow';
+import { isArrivalLate } from '../../utils/attendanceLate';
 import {
   getProgramMemberOrder,
   bumpProgramMemberOrder,
@@ -55,6 +56,12 @@ const AttendanceModal = ({ visible, onClose }) => {
   const scaleValue = useRef(new Animated.Value(0)).current;
   const fadeValue = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef(null);
+
+  const selectedProgram = useMemo(
+    () => programs.find((p) => p.id === selectedProgramId) || null,
+    [programs, selectedProgramId],
+  );
+  const lateAfterMinutes = selectedProgram?.lateAfterMinutes ?? 0;
 
   useEffect(() => {
     if (visible) {
@@ -190,9 +197,11 @@ const AttendanceModal = ({ visible, onClose }) => {
 
   const isLate = (arrivalTime) => {
     if (!arrivalTime) return false;
-    const arrival = new Date(`2000-01-01T${arrivalTime}`);
-    const start = new Date(`2000-01-01T${classStartTime.toTimeString().slice(0, 5)}`);
-    return arrival > start;
+    return isArrivalLate(
+      arrivalTime,
+      classStartTime.toTimeString().slice(0, 5),
+      lateAfterMinutes,
+    );
   };
 
   const markedIds = useMemo(
@@ -244,12 +253,12 @@ const AttendanceModal = ({ visible, onClose }) => {
       setLocalLoading(true);
       setError(null);
 
-      const selectedProgram = programs.find((p) => p.id === selectedProgramId);
       const attendanceRecord = {
         date: selectedDate.toISOString(),
         programId: selectedProgramId,
         classStartTime: classStartTime.toTimeString().slice(0, 5),
         maxLateMinutes: selectedProgram?.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES,
+        lateAfterMinutes,
         members: finalAttendance.map((att) => {
           const member = members.find((m) => m.id === att.memberId);
           return {
