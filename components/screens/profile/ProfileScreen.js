@@ -24,7 +24,7 @@ import OrganizationInviteModal from './OrganizationInviteModal';
 import supabaseService from '../../../services/supabaseService';
 
 const ProfileScreen = () => {
-  const { user, signOut, loading } = useContext(AuthContext);
+  const { user, signOut, loading, changePassword } = useContext(AuthContext);
   const {
     organizations,
     activeOrganization,
@@ -50,6 +50,10 @@ const ProfileScreen = () => {
   const [inviteVisible, setInviteVisible] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const displayName = user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || 'No email';
@@ -153,6 +157,44 @@ const ProfileScreen = () => {
         ? 'They will join when they sign up with that email.'
         : 'Member was added to your organization.',
     );
+  };
+
+  const resetPasswordFields = () => {
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const handleChangePassword = async () => {
+    if (changingPassword) return;
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      Alert.alert('Missing fields', 'Fill in all three password fields.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Weak password', 'New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Mismatch', 'New password and confirmation do not match.');
+      return;
+    }
+    if (oldPassword === newPassword) {
+      Alert.alert('Same password', 'Choose a new password that is different from the current one.');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePassword(oldPassword, newPassword);
+      resetPasswordFields();
+      Alert.alert('Success', 'Your password has been updated.');
+    } catch (e) {
+      Alert.alert('Could not update password', e.message || 'Please try again.');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const handleLogout = () => {
@@ -303,6 +345,60 @@ const ProfileScreen = () => {
             value={user?.email_confirmed_at ? 'Yes' : 'No'}
             iconColor={user?.email_confirmed_at ? AppTheme.success : AppTheme.danger}
           />
+        </View>
+
+        <View style={styles.profileSection}>
+          <Text style={styles.sectionTitle}>Change password</Text>
+          <Text style={styles.passwordHint}>
+            Enter your current password, then choose a new one (at least 6 characters).
+          </Text>
+          <Text style={styles.inputLabel}>Current password</Text>
+          <TextInput
+            style={styles.passwordInput}
+            value={oldPassword}
+            onChangeText={setOldPassword}
+            placeholder="Current password"
+            placeholderTextColor={AppTheme.textMuted}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!changingPassword}
+          />
+          <Text style={styles.inputLabel}>New password</Text>
+          <TextInput
+            style={styles.passwordInput}
+            value={newPassword}
+            onChangeText={setNewPassword}
+            placeholder="New password"
+            placeholderTextColor={AppTheme.textMuted}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!changingPassword}
+          />
+          <Text style={styles.inputLabel}>Confirm new password</Text>
+          <TextInput
+            style={styles.passwordInput}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="New password again"
+            placeholderTextColor={AppTheme.textMuted}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!changingPassword}
+          />
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.passwordSubmitBtn, changingPassword && styles.primaryBtnDisabled]}
+            onPress={handleChangePassword}
+            disabled={changingPassword}
+          >
+            {changingPassword ? (
+              <ActivityIndicator color={AppTheme.background} />
+            ) : (
+              <Text style={styles.primaryBtnText}>Update password</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         <View style={styles.actionsSection}>
@@ -623,6 +719,32 @@ const styles = StyleSheet.create({
     color: AppTheme.background,
     fontWeight: '700',
     fontSize: 16,
+  },
+  passwordHint: {
+    color: AppTheme.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  inputLabel: {
+    color: AppTheme.textSoft,
+    fontSize: 14,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  passwordInput: {
+    backgroundColor: AppTheme.background,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: AppTheme.textPrimary,
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  passwordSubmitBtn: {
+    marginTop: 8,
   },
 });
 

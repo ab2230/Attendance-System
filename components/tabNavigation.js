@@ -7,6 +7,7 @@ import AttendanceScreen from "./screens/attendance/AttendanceScreen";
 import AttendanceRecords from "./screens/attendance/AttendanceRecords";
 import RoomNavigation from "./navigations/RoomNavigation";
 import ProfileScreen from "./screens/profile/ProfileScreen";
+import ProgramAttendanceReportScreen from "./screens/reports/ProgramAttendanceReportScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -32,6 +33,8 @@ function MyTabs() {
                 iconName = "account-group";
               } else if (route.name === "Room") {
                 iconName = "door-open";
+              } else if (route.name === "Reports") {
+                iconName = "chart-bar";
               } else if (route.name === "Profile") {
                 iconName = "account-circle";
               }
@@ -44,6 +47,7 @@ function MyTabs() {
           <Tab.Screen name="History" component={AttendanceRecords} />
           <Tab.Screen name="Room" component={RoomNavigation} />
           <Tab.Screen name="Classes" component={ClassesNavigation} />
+          <Tab.Screen name="Reports" component={ProgramAttendanceReportScreen} />
           <Tab.Screen name="Profile" component={ProfileScreen} />
         </Tab.Navigator>
       </View>

@@ -136,6 +136,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  /** Verify current password, then set a new one (does not toggle global auth loading). */
+  const changePassword = async (oldPassword, newPassword) => {
+    if (!user?.email) {
+      throw new Error('You must be signed in to change your password.');
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: oldPassword,
+    });
+
+    if (verifyError) {
+      throw new Error('Current password is incorrect.');
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+
+    return { success: true, message: 'Password updated successfully' };
+  };
+
   const getProfile = async () => {
     try {
       if (!user) return null;
@@ -182,6 +203,7 @@ export const AuthProvider = ({ children }) => {
     signOut,
     resetPassword,
     updatePassword,
+    changePassword,
     getProfile,
     updateProfile,
     isAuthenticated: !!user,
