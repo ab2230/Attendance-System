@@ -440,3 +440,28 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Refresh views so they expose organization_id and other new member columns
+CREATE OR REPLACE VIEW public.members_with_class AS
+SELECT
+    m.*,
+    c.name AS class_name
+FROM public.members m
+LEFT JOIN public.classes c ON m.class_id = c.id;
+
+CREATE OR REPLACE VIEW public.program_members AS
+SELECT
+    p.id AS program_id,
+    p.name AS program_name,
+    p.user_id,
+    p.organization_id AS program_organization_id,
+    m.id AS member_id,
+    m.first_name,
+    m.last_name,
+    m.type AS member_type,
+    m.organization_id AS member_organization_id,
+    c.name AS class_name
+FROM public.programs p
+JOIN public.program_enrollments pe ON p.id = pe.program_id
+JOIN public.members m ON pe.member_id = m.id
+LEFT JOIN public.classes c ON m.class_id = c.id;

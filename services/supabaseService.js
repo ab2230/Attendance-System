@@ -200,14 +200,18 @@ class SupabaseService {
   async getMembers() {
     try {
       const orgId = this._requireOrgId();
+      // Query members directly — members_with_class may lack organization_id until the view is recreated
       const { data, error } = await supabase
-        .from('members_with_class')
-        .select('*')
+        .from('members')
+        .select('*, classes (name)')
         .eq('organization_id', orgId)
         .order('first_name');
-      
+
       if (error) throw error;
-      return data || [];
+      return (data || []).map((row) => ({
+        ...row,
+        class_name: row.classes?.name ?? null,
+      }));
     } catch (error) {
       console.error('Get members error:', error);
       throw error;
