@@ -84,7 +84,7 @@ android {
         applicationId "com.attendancesystemapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
+        versionCode 9
         versionName "1.0.1"
 
         // Ensure any app-level native builds use 16 KB ELF alignment
