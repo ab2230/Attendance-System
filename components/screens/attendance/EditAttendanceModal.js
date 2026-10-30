@@ -33,25 +33,30 @@ const EditAttendanceModal = ({
   const [localRecord, setLocalRecord] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Sync local copy when the record updates (e.g. Present/Absent),
+  // but only clear search when opening a different attendance record.
   useEffect(() => {
     if (selectedRecord) {
       setLocalRecord({ ...selectedRecord });
-      setSearchQuery('');
     }
   }, [selectedRecord]);
 
+  useEffect(() => {
+    setSearchQuery('');
+  }, [selectedRecord?.id]);
+
   const filteredMembers = useMemo(() => {
-    if (!selectedRecord?.members) return [];
+    const sourceMembers = localRecord?.members || selectedRecord?.members || [];
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return selectedRecord.members;
-    return selectedRecord.members.filter((item) => {
+    if (!query) return sourceMembers;
+    return sourceMembers.filter((item) => {
       const member = members.find((m) => m.id === item.memberId);
       const name = member
         ? `${member.firstName} ${member.lastName}`.toLowerCase()
         : `${item.firstName || ''} ${item.lastName || ''}`.toLowerCase();
       return name.includes(query);
     });
-  }, [selectedRecord, members, searchQuery]);
+  }, [localRecord, selectedRecord, members, searchQuery]);
 
   if (!selectedRecord || !localRecord) return null;
 
@@ -252,7 +257,7 @@ const EditAttendanceModal = ({
 
             {/* Members List */}
             <Text style={styles.sectionTitle}>
-              Students ({filteredMembers.length}/{selectedRecord.members.length})
+              Students ({filteredMembers.length}/{(localRecord.members || selectedRecord.members).length})
             </Text>
             <FlatList
               data={filteredMembers}
