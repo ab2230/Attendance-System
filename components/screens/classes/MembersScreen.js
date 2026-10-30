@@ -1,5 +1,5 @@
-import React, { useState, useContext, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, RefreshControl, ScrollView } from "react-native";
+import React, { useState, useContext, useEffect, useRef, useMemo } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, RefreshControl, ScrollView, TextInput } from "react-native";
 import { SwipeListView } from "react-native-swipe-list-view";
 import { ClassContext } from "../../context/ClassContext";
 import { MemberContext } from "../../context/MemberContext";
@@ -34,6 +34,7 @@ const MembersScreen = ({ route, navigation }) => {
   const [showImportGuide, setShowImportGuide] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -44,7 +45,20 @@ const MembersScreen = ({ route, navigation }) => {
     }).start();
   }, []);
 
-  const filteredMembers = members.filter((m) => m.classId === selectedClassId);
+  const classMembers = useMemo(
+    () => members.filter((m) => m.classId === selectedClassId),
+    [members, selectedClassId]
+  );
+
+  const filteredMembers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return classMembers;
+    return classMembers.filter((m) => {
+      const name = `${m.firstName || ""} ${m.lastName || ""}`.toLowerCase();
+      const type = (m.type || DEFAULT_MEMBER_TYPE).toLowerCase();
+      return name.includes(query) || type.includes(query);
+    });
+  }, [classMembers, searchQuery]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -211,13 +225,38 @@ const MembersScreen = ({ route, navigation }) => {
         onProceed={proceedImport}
       />
 
+      {classMembers.length > 0 && (
+        <View style={styles.searchBox}>
+          <Icon name="search" size={20} color={AppTheme.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search members..."
+            placeholderTextColor={AppTheme.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            selectionColor={AppTheme.accent}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name="cancel" size={18} color={AppTheme.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {loading && members.length === 0 ? (
         <LoadingScreen
           text="Loading members..."
           backgroundColor={AppTheme.background}
           color={AppTheme.accent}
         />
-      ) : filteredMembers.length === 0 ? (
+      ) : classMembers.length === 0 ? (
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
           refreshControl={refreshControl}
@@ -226,6 +265,18 @@ const MembersScreen = ({ route, navigation }) => {
             icon="account-remove" 
             title="No Students Found" 
             message="There are no students enrolled yet. Add students to start tracking attendance. You can also import an Excel file with First Name, Last Name, and Type (Regular, Extension, or Distant)." 
+          />
+        </ScrollView>
+      ) : filteredMembers.length === 0 ? (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={refreshControl}
+          keyboardShouldPersistTaps="handled"
+        >
+          <EmptyState
+            icon="account-search"
+            title="No Matches"
+            message="No members match your search. Try another name or type."
           />
         </ScrollView>
       ) : (
@@ -241,6 +292,7 @@ const MembersScreen = ({ route, navigation }) => {
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={refreshControl}
+          keyboardShouldPersistTaps="handled"
         />
       )}
 
@@ -298,6 +350,27 @@ const styles = StyleSheet.create({
   container: { 
     flex: 1,
     backgroundColor: AppTheme.background,
+  },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+  },
+  searchInput: {
+    flex: 1,
+    color: AppTheme.textPrimary,
+    fontSize: 15,
+    fontWeight: "500",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
   listContent: {
     paddingBottom: 20,

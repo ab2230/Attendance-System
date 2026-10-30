@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, Animated, RefreshControl } from "react-native";
+import React, { useState, useEffect, useContext, useRef, useMemo } from "react";
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, Animated, RefreshControl, TextInput } from "react-native";
 import { ProgramContext } from "../../context/ProgramContext";
 import { MemberContext } from "../../context/MemberContext";
 import AddButton from '../../common/addButton';
@@ -18,6 +18,7 @@ const MembersInProgram = ({ route, navigation }) => {
   const [showModal, setShowModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [unenrollingId, setUnenrollingId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -29,9 +30,23 @@ const MembersInProgram = ({ route, navigation }) => {
   }, []);
 
   const program = programs.find((p) => p.id === programId);
-  const enrolledStudents = members.filter((member) => 
-    program?.enrolledStudents?.includes(member.id)
+  const enrolledStudents = useMemo(
+    () =>
+      members.filter((member) =>
+        program?.enrolledStudents?.includes(member.id)
+      ),
+    [members, program?.enrolledStudents]
   );
+
+  const displayedStudents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return enrolledStudents;
+    return enrolledStudents.filter((m) => {
+      const name = `${m.firstName || ""} ${m.lastName || ""}`.toLowerCase();
+      const type = (m.type || "Regular").toLowerCase();
+      return name.includes(query) || type.includes(query);
+    });
+  }, [enrolledStudents, searchQuery]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -122,17 +137,47 @@ const MembersInProgram = ({ route, navigation }) => {
     <View style={styles.container}>
       <TopNavigator title="Enrolled Students" backButton={true} navigation={navigation} />
 
+      {enrolledStudents.length > 0 && (
+        <View style={styles.searchBox}>
+          <Icon name="search" size={20} color={AppTheme.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search members..."
+            placeholderTextColor={AppTheme.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            selectionColor={AppTheme.accent}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name="cancel" size={18} color={AppTheme.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       <FlatList
-        data={enrolledStudents}
+        data={displayedStudents}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppTheme.accent} colors={[AppTheme.accent]} />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No students enrolled yet</Text>
+            <Text style={styles.emptyText}>
+              {enrolledStudents.length === 0
+                ? "No students enrolled yet"
+                : "No members match your search"}
+            </Text>
           </View>
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -156,6 +201,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AppTheme.background,
+  },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+  },
+  searchInput: {
+    flex: 1,
+    color: AppTheme.textPrimary,
+    fontSize: 15,
+    fontWeight: "500",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
   listContent: {
     paddingBottom: 20,
