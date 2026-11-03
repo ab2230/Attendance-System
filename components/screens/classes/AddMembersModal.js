@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useContext } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import CustomTextInput from "../../common/CustomTextInput";
 import CustomDropDown from "../../common/CustomDropDown";
 import LoadingButton from "../../common/LoadingButton";
@@ -11,7 +11,7 @@ import AntDesign from 'react-native-vector-icons/AntDesign';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const AddMembersModal = ({
   visible,
@@ -138,90 +138,99 @@ const AddMembersModal = ({
           reducedTransparencyFallbackColor="black"
         />
         
-        <Animated.View style={[
-          styles.modalContainer, 
-          { 
-            transform: [{ scale: scaleValue }],
-            opacity: fadeValue
-          }
-        ]}>
-          {/* Header with gradient */}
-          <LinearGradient
-            colors={['#667eea', '#764ba2']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.modalHeader}
-          >
-            <Text style={styles.title}>{isEditing ? "Update Member" : "Add New Member"}</Text>
-            <TouchableOpacity 
-              onPress={onClose} 
-              style={styles.closeButton}
-              activeOpacity={0.7}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardAvoid}
+        >
+          <Animated.View style={[
+            styles.modalContainer, 
+            { 
+              transform: [{ scale: scaleValue }],
+              opacity: fadeValue
+            }
+          ]}>
+            <LinearGradient
+              colors={['#667eea', '#764ba2']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.modalHeader}
             >
-              <AntDesign name="close" size={24} color="white" />
-            </TouchableOpacity>
-          </LinearGradient>
+              <Text style={styles.title}>{isEditing ? "Update Member" : "Add New Member"}</Text>
+              <TouchableOpacity 
+                onPress={onClose} 
+                style={styles.closeButton}
+                activeOpacity={0.7}
+              >
+                <AntDesign name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </LinearGradient>
 
-          {/* Modal Content */}
-          <View style={styles.modalContent}>
-            <View style={styles.dropdownContainer}>
-              {isEditing ? (
+            <ScrollView
+              style={styles.scrollArea}
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <View style={styles.dropdownContainer}>
+                {isEditing ? (
+                  <CustomDropDown
+                    label="Select Class"
+                    data={classes}
+                    currentSelected={classes.find(cls => cls.id === selectedClassId)}
+                    setSelected={(input) => setSelectedClassId(input.id)}
+                    required={true}
+                    containerStyle={styles.dropdownStyle}
+                  />
+                ) : (
+                  <View style={[styles.dropdownStyle, styles.disabledDropdown]}>
+                    <Text style={styles.disabledLabel}>Class</Text>
+                    <Text style={styles.disabledValue}>
+                      {classes.find(cls => cls.id === selectedClassId)?.name || 'No Class Selected'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <CustomTextInput 
+                label="First Name"
+                input={firstName}
+                placeholder="Eg: Abrham"
+                setInput={(value) => setFirstName(value)}
+                containerStyle={styles.inputField}
+              />
+
+              <CustomTextInput 
+                label="Last Name"
+                input={lastName}
+                placeholder="Eg: Tesfaye"
+                setInput={(value) => setLastName(value)}
+                containerStyle={styles.inputField}
+              />
+
+              <View style={styles.dropdownContainer}>
                 <CustomDropDown
-                  label="Select Class"
-                  data={classes}
-                  currentSelected={classes.find(cls => cls.id === selectedClassId)}
-                  setSelected={(input) => setSelectedClassId(input.id)}
+                  label="Member Type"
+                  data={MEMBER_TYPE_OPTIONS}
+                  currentSelected={MEMBER_TYPE_OPTIONS.find((option) => option.id === memberType)}
+                  setSelected={(input) => setMemberType(input.id)}
                   required={true}
                   containerStyle={styles.dropdownStyle}
                 />
-              ) : (
-                <View style={[styles.dropdownStyle, styles.disabledDropdown]}>
-                  <Text style={styles.disabledLabel}>Class</Text>
-                  <Text style={styles.disabledValue}>
-                    {classes.find(cls => cls.id === selectedClassId)?.name || 'No Class Selected'}
-                  </Text>
-                </View>
-              )}
-            </View>
+              </View>
 
-            <CustomTextInput 
-              label="First Name"
-              input={firstName}
-              placeholder="Eg: Abrham"
-              setInput={(value) => setFirstName(value)}
-              containerStyle={styles.inputField}
-            />
-
-            <CustomTextInput 
-              label="Last Name"
-              input={lastName}
-              placeholder="Eg: Tesfaye"
-              setInput={(value) => setLastName(value)}
-              containerStyle={styles.inputField}
-            />
-
-            <View style={styles.dropdownContainer}>
-              <CustomDropDown
-                label="Member Type"
-                data={MEMBER_TYPE_OPTIONS}
-                currentSelected={MEMBER_TYPE_OPTIONS.find((option) => option.id === memberType)}
-                setSelected={(input) => setMemberType(input.id)}
-                required={true}
-                containerStyle={styles.dropdownStyle}
+              <LoadingButton
+                onPress={handleSubmit}
+                loading={localLoading || loading}
+                title={isEditing ? "Update Member" : "Add Member"}
+                loadingText={isEditing ? "Updating..." : "Adding..."}
+                icon={isEditing ? "checkcircle" : "adduser"}
+                colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
+                style={styles.submitButton}
               />
-            </View>
-
-            <LoadingButton
-              onPress={handleSubmit}
-              loading={localLoading || loading}
-              title={isEditing ? "Update Member" : "Add Member"}
-              loadingText={isEditing ? "Updating..." : "Adding..."}
-              icon={isEditing ? "checkcircle" : "adduser"}
-              colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
-              style={styles.submitButton}
-            />
-          </View>
-        </Animated.View>
+            </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Animated.View>
       
       <ErrorModal
@@ -248,6 +257,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
   },
   absolute: {
     position: 'absolute',
@@ -256,8 +267,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
   },
+  keyboardAvoid: {
+    width: '100%',
+    maxWidth: width * 0.92,
+    alignItems: 'center',
+  },
   modalContainer: {
-    width: width * 0.85,
+    width: '100%',
+    maxHeight: height * 0.85,
     backgroundColor: '#fff',
     borderRadius: 20,
     overflow: 'hidden',
@@ -271,14 +288,18 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   modalHeader: {
-    paddingVertical: 20,
-    paddingHorizontal: 25,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  scrollArea: {
+    flexGrow: 0,
+  },
   modalContent: {
-    padding: 25,
+    padding: 20,
+    paddingBottom: 28,
   },
   title: {
     fontSize: 22,

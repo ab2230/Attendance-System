@@ -2,6 +2,7 @@ import 'react-native-gesture-handler';
 
 import React, { useContext } from 'react';
 import { View } from "react-native";
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import TabNavigation from './components/tabNavigation';
 
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
@@ -74,19 +75,21 @@ const App = () => {
   // },[])
 
   return (
-    <AuthProvider>
-      <OrganizationProvider>
-        <ClassProvider>
-          <MemberProvider>
-            <ProgramProvider>
-              <AttendanceProvider>
-                <AppNavigator />
-              </AttendanceProvider>
-            </ProgramProvider>
-          </MemberProvider>
-        </ClassProvider>
-      </OrganizationProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <OrganizationProvider>
+          <ClassProvider>
+            <MemberProvider>
+              <ProgramProvider>
+                <AttendanceProvider>
+                  <AppNavigator />
+                </AttendanceProvider>
+              </ProgramProvider>
+            </MemberProvider>
+          </ClassProvider>
+        </OrganizationProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

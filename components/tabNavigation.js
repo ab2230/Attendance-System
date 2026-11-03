@@ -1,5 +1,6 @@
 import React from "react";
-import { SafeAreaView, View, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import ClassesNavigation from "./navigations/ClassesNavigation";
@@ -13,7 +14,8 @@ const Tab = createBottomTabNavigator();
 
 function MyTabs() {
   return (
-    <SafeAreaView style={styles.safeArea}>
+    // Top inset is handled by TopNavigator; only pad the bottom (home indicator / nav bar).
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <View style={styles.container}>
         <Tab.Navigator
           screenOptions={({ route }) => ({
@@ -58,18 +60,18 @@ function MyTabs() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#0a0f24", // Dark background
+    backgroundColor: "#0a0f24",
   },
   container: {
     flex: 1,
   },
   tabBar: {
-    backgroundColor: "#162447", // Deep blue
+    backgroundColor: "#162447",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     height: 65,
     paddingBottom: 10,
-    elevation: 5, // Adds shadow on Android
+    elevation: 5,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.2,

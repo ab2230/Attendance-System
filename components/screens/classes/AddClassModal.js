@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Modal, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native'
+import { StyleSheet, Text, View, Modal, TouchableOpacity, Animated, Easing, Dimensions, ScrollView, KeyboardAvoidingView, Platform } from 'react-native'
 import React, { useEffect, useRef, useState, useContext } from 'react'
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import CustomTextInput from "../../common/CustomTextInput";
@@ -9,7 +9,7 @@ import { ClassContext } from "../../context/ClassContext";
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const AddClassModal = ({className, setClassName, visible, onClose, isEditing, editingClass, t}) => {
   const { addClass, updateClass, loading } = useContext(ClassContext);
@@ -99,51 +99,59 @@ const AddClassModal = ({className, setClassName, visible, onClose, isEditing, ed
           reducedTransparencyFallbackColor="black"
         />
         
-        <Animated.View style={[
-          styles.modalContainer, 
-          { 
-            transform: [{ scale: scaleValue }],
-            opacity: fadeValue
-          }
-        ]}>
-          {/* Header with gradient */}
-          <LinearGradient
-            colors={['#667eea', '#764ba2']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.modalHeader}
-          >
-            <Text style={styles.title}>{isEditing ? t('update') : t('add')} Class</Text>
-            <TouchableOpacity 
-              onPress={onClose} 
-              style={styles.closeButton}
-              activeOpacity={0.7}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardAvoid}
+        >
+          <Animated.View style={[
+            styles.modalContainer, 
+            { 
+              transform: [{ scale: scaleValue }],
+              opacity: fadeValue
+            }
+          ]}>
+            <LinearGradient
+              colors={['#667eea', '#764ba2']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.modalHeader}
             >
-              <AntDesign name="close" size={24} color="white" />
-            </TouchableOpacity>
-          </LinearGradient>
+              <Text style={styles.title}>{isEditing ? t('update') : t('add')} Class</Text>
+              <TouchableOpacity 
+                onPress={onClose} 
+                style={styles.closeButton}
+                activeOpacity={0.7}
+              >
+                <AntDesign name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </LinearGradient>
 
-          {/* Modal Content */}
-          <View style={styles.modalContent}>
-            <CustomTextInput 
-              label="Class Name"
-              input={className}
-              placeholder="Eg: Advanced Yoga"
-              setInput={(value) => setClassName(value)}
-              containerStyle={styles.inputContainer}
-            />
+            <ScrollView
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <CustomTextInput 
+                label="Class Name"
+                input={className}
+                placeholder="Eg: Advanced Yoga"
+                setInput={(value) => setClassName(value)}
+                containerStyle={styles.inputContainer}
+              />
 
-            <LoadingButton
-              onPress={handleSubmit}
-              loading={localLoading || loading}
-              title={isEditing ? (t ? t('update') : 'Update') + ' Class' : (t ? t('add') : 'Add') + ' Class'}
-              loadingText={isEditing ? 'Updating...' : 'Adding...'}
-              icon={isEditing ? "checkcircle" : "pluscircle"}
-              colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
-              style={styles.submitButton}
-            />
-          </View>
-        </Animated.View>
+              <LoadingButton
+                onPress={handleSubmit}
+                loading={localLoading || loading}
+                title={isEditing ? (t ? t('update') : 'Update') + ' Class' : (t ? t('add') : 'Add') + ' Class'}
+                loadingText={isEditing ? 'Updating...' : 'Adding...'}
+                icon={isEditing ? "checkcircle" : "pluscircle"}
+                colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
+                style={styles.submitButton}
+              />
+            </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Animated.View>
       
       <ErrorModal
@@ -172,6 +180,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
   },
   absolute: {
     position: 'absolute',
@@ -180,8 +190,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
   },
+  keyboardAvoid: {
+    width: '100%',
+    maxWidth: width * 0.92,
+    alignItems: 'center',
+  },
   modalContainer: {
-    width: width * 0.85,
+    width: '100%',
+    maxHeight: height * 0.85,
     backgroundColor: '#fff',
     borderRadius: 20,
     overflow: 'hidden',
@@ -195,14 +211,15 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   modalHeader: {
-    paddingVertical: 20,
-    paddingHorizontal: 25,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   modalContent: {
-    padding: 25,
+    padding: 20,
+    paddingBottom: 28,
   },
   title: {
     fontSize: 22,

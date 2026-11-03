@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useContext } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, Easing, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import CustomTextInput from "../../common/CustomTextInput";
 import LoadingButton from "../../common/LoadingButton";
 import ErrorModal from "../../common/ErrorModal";
@@ -11,7 +11,7 @@ import AntDesign from 'react-native-vector-icons/AntDesign';
 import LinearGradient from 'react-native-linear-gradient';
 import { BlurView } from '@react-native-community/blur';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const AddProgramModal = ({
   programName,
@@ -144,73 +144,84 @@ const AddProgramModal = ({
           reducedTransparencyFallbackColor="black"
         />
         
-        <Animated.View style={[
-          styles.modalContainer, 
-          { 
-            transform: [{ scale: scaleValue }],
-            opacity: fadeValue
-          }
-        ]}>
-          <LinearGradient
-            colors={['#667eea', '#764ba2']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.modalHeader}
-          >
-            <Text style={styles.title}>{isEditing ? 'Update Program' : 'Create New Program'}</Text>
-            <TouchableOpacity 
-              onPress={onClose} 
-              style={styles.closeButton}
-              activeOpacity={0.7}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardAvoid}
+        >
+          <Animated.View style={[
+            styles.modalContainer, 
+            { 
+              transform: [{ scale: scaleValue }],
+              opacity: fadeValue
+            }
+          ]}>
+            <LinearGradient
+              colors={['#667eea', '#764ba2']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.modalHeader}
             >
-              <AntDesign name="close" size={24} color="white" />
-            </TouchableOpacity>
-          </LinearGradient>
+              <Text style={styles.title}>{isEditing ? 'Update Program' : 'Create New Program'}</Text>
+              <TouchableOpacity 
+                onPress={onClose} 
+                style={styles.closeButton}
+                activeOpacity={0.7}
+              >
+                <AntDesign name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </LinearGradient>
 
-          <View style={styles.modalContent}>
-            <CustomTextInput 
-              label="Program Name"
-              input={programName}
-              placeholder="Eg: Advanced Yoga Course"
-              setInput={(value) => setProgramName(value)}
-              containerStyle={styles.inputField}
-            />
+            <ScrollView
+              style={styles.scrollArea}
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <CustomTextInput 
+                label="Program Name"
+                input={programName}
+                placeholder="Eg: Advanced Yoga Course"
+                setInput={(value) => setProgramName(value)}
+                containerStyle={styles.inputField}
+              />
 
-            <CustomTextInput 
-              label="Maximum Late Minutes"
-              input={String(maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES)}
-              placeholder="Eg: 60"
-              setInput={(value) => setMaxLateMinutes?.(value.replace(/[^0-9]/g, ''))}
-              keyboardType="numeric"
-              containerStyle={styles.inputField}
-            />
-            <Text style={styles.helperText}>
-              Attendance stays editable until class start time plus this many minutes. After that, edits are locked.
-            </Text>
+              <CustomTextInput 
+                label="Maximum Late Minutes"
+                input={String(maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES)}
+                placeholder="Eg: 60"
+                setInput={(value) => setMaxLateMinutes?.(value.replace(/[^0-9]/g, ''))}
+                keyboardType="numeric"
+                containerStyle={styles.inputField}
+              />
+              <Text style={styles.helperText}>
+                Attendance stays editable until class start time plus this many minutes. After that, edits are locked.
+              </Text>
 
-            <CustomTextInput 
-              label="Late starts after (minutes)"
-              input={String(lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES)}
-              placeholder="Eg: 30"
-              setInput={(value) => setLateAfterMinutes?.(value.replace(/[^0-9]/g, ''))}
-              keyboardType="numeric"
-              containerStyle={styles.inputField}
-            />
-            <Text style={styles.helperText}>
-              Arrivals within this many minutes after class start count as on time. After that, they are marked late (e.g. 30).
-            </Text>
+              <CustomTextInput 
+                label="Late starts after (minutes)"
+                input={String(lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES)}
+                placeholder="Eg: 30"
+                setInput={(value) => setLateAfterMinutes?.(value.replace(/[^0-9]/g, ''))}
+                keyboardType="numeric"
+                containerStyle={styles.inputField}
+              />
+              <Text style={styles.helperText}>
+                Arrivals within this many minutes after class start count as on time. After that, they are marked late (e.g. 30).
+              </Text>
 
-            <LoadingButton
-              onPress={handleSubmit}
-              loading={localLoading || loading}
-              title={isEditing ? 'Update Program' : 'Create Program'}
-              loadingText={isEditing ? 'Updating...' : 'Creating...'}
-              icon={isEditing ? "checkcircle" : "pluscircle"}
-              colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
-              style={styles.submitButton}
-            />
-          </View>
-        </Animated.View>
+              <LoadingButton
+                onPress={handleSubmit}
+                loading={localLoading || loading}
+                title={isEditing ? 'Update Program' : 'Create Program'}
+                loadingText={isEditing ? 'Updating...' : 'Creating...'}
+                icon={isEditing ? "checkcircle" : "pluscircle"}
+                colors={isEditing ? ['#4facfe', '#00f2fe'] : ['#43e97b', '#38f9d7']}
+                style={styles.submitButton}
+              />
+            </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Animated.View>
       
       <ErrorModal
@@ -237,6 +248,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
   },
   absolute: {
     position: 'absolute',
@@ -245,8 +258,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
   },
+  keyboardAvoid: {
+    width: '100%',
+    maxWidth: width * 0.92,
+    alignItems: 'center',
+  },
   modalContainer: {
-    width: width * 0.85,
+    width: '100%',
+    maxHeight: height * 0.85,
     backgroundColor: '#fff',
     borderRadius: 20,
     overflow: 'hidden',
@@ -260,14 +279,18 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   modalHeader: {
-    paddingVertical: 20,
-    paddingHorizontal: 25,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  scrollArea: {
+    flexGrow: 0,
+  },
   modalContent: {
-    padding: 25,
+    padding: 20,
+    paddingBottom: 28,
   },
   title: {
     fontSize: 22,

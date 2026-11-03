@@ -355,8 +355,10 @@ const AttendanceModal = ({ visible, onClose }) => {
     return (
       <View style={styles.memberCard}>
         <View style={styles.memberInfo}>
-          <Text style={styles.memberName}>{item.firstName} {item.lastName}</Text>
-          <Text style={styles.memberClass}>
+          <Text style={styles.memberName} numberOfLines={2}>
+            {item.firstName} {item.lastName}
+          </Text>
+          <Text style={styles.memberClass} numberOfLines={1}>
             {item.type || 'Regular'}
           </Text>
           {isPresent && arrivalTime && (
@@ -369,7 +371,7 @@ const AttendanceModal = ({ visible, onClose }) => {
               <Text style={[
                 styles.timeText,
                 studentIsLate && styles.lateTimeText
-              ]}>
+              ]} numberOfLines={1}>
                 Arrived: {arrivalTime} {studentIsLate && '(Late)'}
               </Text>
             </View>
@@ -379,6 +381,7 @@ const AttendanceModal = ({ visible, onClose }) => {
           <TouchableOpacity
             onPress={() => handleMarkAttendance(item.id, 'Present')}
             activeOpacity={0.7}
+            style={styles.statusTouchable}
           >
             <LinearGradient
               colors={attendance.some(a => a.memberId === item.id && a.status === 'Present') 
@@ -419,6 +422,7 @@ const AttendanceModal = ({ visible, onClose }) => {
           <TouchableOpacity
             onPress={() => handleMarkAttendance(item.id, 'Absent')}
             activeOpacity={0.7}
+            style={styles.statusTouchable}
           >
             <LinearGradient
               colors={attendance.some(a => a.memberId === item.id && a.status === 'Absent') 
@@ -925,9 +929,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   memberCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     backgroundColor: '#fff',
     padding: 15,
     borderRadius: 12,
@@ -938,13 +941,16 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   memberInfo: {
-    flex: 1,
+    width: '100%',
+    marginBottom: 12,
+    minWidth: 0,
   },
   memberName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#343a40',
     marginBottom: 4,
+    flexShrink: 1,
   },
   memberClass: {
     fontSize: 14,
@@ -955,24 +961,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
+    minWidth: 0,
   },
   timeText: {
     fontSize: 12,
     color: '#43e97b',
     marginLeft: 4,
     fontWeight: '500',
+    flexShrink: 1,
   },
   lateTimeText: {
     color: '#ff6b6b',
   },
   statusButtonsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     alignItems: 'center',
+  },
+  statusTouchable: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 96,
   },
   statusButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -982,11 +997,12 @@ const styles = StyleSheet.create({
   timeButton: {
     borderRadius: 16,
     overflow: 'hidden',
+    flexGrow: 0,
   },
   timeButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 10,
   },
   timeButtonText: {

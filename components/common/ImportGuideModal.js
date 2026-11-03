@@ -26,7 +26,12 @@ const ImportGuideModal = ({ visible, onClose, onProceed }) => {
             </LinearGradient>
           </View>
 
-          <ScrollView contentContainerStyle={styles.contentContainer}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
             <Text style={styles.sectionTitle}>Required file format</Text>
             <Text style={styles.paragraph}>
               Prepare an Excel or CSV file with a header row and three columns:
@@ -118,6 +123,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 520,
+    maxHeight: '88%',
     backgroundColor: '#fff',
     borderRadius: 16,
     overflow: 'hidden',
@@ -136,6 +142,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  scroll: {
+    flexGrow: 1,
+    flexShrink: 1,
   },
   contentContainer: {
     paddingHorizontal: 16,

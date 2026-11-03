@@ -116,7 +116,7 @@ const EditAttendanceModal = ({
     return (
       <View style={styles.memberRow}>
         <View style={styles.memberInfo}>
-          <Text style={styles.memberName}>{memberName}</Text>
+          <Text style={styles.memberName} numberOfLines={2}>{memberName}</Text>
           {isPresent && item.arrivalTime && (
             <View style={styles.timeContainer}>
               <Icon 
@@ -127,7 +127,7 @@ const EditAttendanceModal = ({
               <Text style={[
                 styles.timeText,
                 studentIsLate && styles.lateTimeText
-              ]}>
+              ]} numberOfLines={1}>
                 Arrived: {item.arrivalTime} {studentIsLate && '(Late)'}
               </Text>
             </View>
@@ -424,46 +424,54 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   memberRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     paddingVertical: 12,
   },
   memberInfo: {
-    flex: 1,
+    width: '100%',
+    marginBottom: 10,
+    minWidth: 0,
   },
   memberName: {
     fontSize: 16,
     fontWeight: '500',
     color: '#343a40',
+    flexShrink: 1,
   },
   timeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
+    minWidth: 0,
   },
   timeText: {
     fontSize: 12,
     color: '#43e97b',
     marginLeft: 4,
     fontWeight: '500',
+    flexShrink: 1,
   },
   lateTimeText: {
     color: '#ff6b6b',
   },
   actionButtons: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   statusButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 15,
     borderWidth: 1,
     borderColor: '#e9ecef',
     backgroundColor: '#f8f9fa',
+    flexGrow: 1,
+    minWidth: 96,
   },
   presentButton: {
     backgroundColor: '#43e97b',

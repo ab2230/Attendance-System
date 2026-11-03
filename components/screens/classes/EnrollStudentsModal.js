@@ -1,5 +1,6 @@
 import React, { useState, useContext } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput, Modal } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProgramContext } from "../../context/ProgramContext";
 import { MemberContext } from "../../context/MemberContext";
 import { ClassContext } from "../../context/ClassContext";
@@ -8,6 +9,7 @@ import LoadingButton from "../../common/LoadingButton";
 import LoadingScreen from "../../common/LoadingScreen";
 
 const EnrollStudentsModal = ({ programId, onClose, visible }) => {
+  const insets = useSafeAreaInsets();
   const { members } = useContext(MemberContext);
   const { programs, enrollStudents, loading } = useContext(ProgramContext);
   const { classes } = useContext(ClassContext);
@@ -18,19 +20,18 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
   const program = programs.find((p) => p.id === programId);
   const enrolledStudentIds = program?.enrolledStudents || [];
 
-  // Filter students who are not yet enrolled
   let availableStudents = members.filter((member) => !enrolledStudentIds.includes(member.id));
 
-    // Filter students by selected class
-    if (selectedClassId) {
-      availableStudents = availableStudents.filter((student) => student.classId === selectedClassId);
-    }
-  // Search filter
+  if (selectedClassId) {
+    availableStudents = availableStudents.filter((student) => student.classId === selectedClassId);
+  }
+
   const filteredStudents = availableStudents.filter(
     (student) =>
       (!selectedClassId || student.classId === selectedClassId) &&
       `${student.firstName} ${student.lastName}`.toLowerCase().includes(searchText.toLowerCase())
   );
+
   const toggleStudentSelection = (studentId) => {
     setSelectedStudents((prev) =>
       prev.includes(studentId)
@@ -62,82 +63,88 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
   };
 
   return (
-  <Modal visible={visible} transparent={true} animationType="slide">
-    <View style={styles.modalContainer}>
-      <Text style={styles.title}>Enroll Students</Text>
-       {/* Class Selection */}
-       <CustomDropDown
-        label="Selected Class"
-        data={[{ id: 0, name: "All" }, ...classes]}
-        currentSelected={classes.find((cls) => cls.id === selectedClassId) || { id: 0, name: "All" }}
-        setSelected={(input) => setSelectedClassId(input.id === 0 ? null : input.id)}
-        required={true}
-      />
-      {/* Search Bar */}
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search students..."
-        value={searchText}
-        onChangeText={setSearchText}
-        placeholderTextColor={"#999"}
-      />
+    <Modal visible={visible} transparent={true} animationType="slide">
+      <View style={[styles.modalContainer, { paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <Text style={styles.title}>Enroll Students</Text>
 
-      <FlatList
-        data={filteredStudents}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
+        <CustomDropDown
+          label="Selected Class"
+          data={[{ id: 0, name: "All" }, ...classes]}
+          currentSelected={classes.find((cls) => cls.id === selectedClassId) || { id: 0, name: "All" }}
+          setSelected={(input) => setSelectedClassId(input.id === 0 ? null : input.id)}
+          required={true}
+        />
+
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search students..."
+          value={searchText}
+          onChangeText={setSearchText}
+          placeholderTextColor={"#999"}
+        />
+
+        <FlatList
+          style={styles.list}
+          data={filteredStudents}
+          keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.studentItem}
+              onPress={() => toggleStudentSelection(item.id)}
+            >
+              <View style={styles.studentInfo}>
+                <Text style={styles.studentName} numberOfLines={1}>
+                  {item.firstName} {item.lastName}
+                </Text>
+                <Text style={styles.studentType}>{item.type || 'Regular'}</Text>
+              </View>
+              {selectedStudents.includes(item.id) && <Text style={styles.checkmark}>✓</Text>}
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={<Text style={styles.emptyText}>No available students to enroll.</Text>}
+        />
+
+        <View style={styles.footer}>
+          <LoadingButton
+            onPress={handleEnrollStudents}
+            loading={loading}
+            title="Enroll Selected"
+            loadingText="Enrolling..."
+            icon="adduser"
+            colors={['#162447', '#1e3a5f']}
+            style={styles.enrollButton}
+            disabled={selectedStudents.length === 0}
+          />
+
+          <LoadingButton
+            onPress={handleEnrollAll}
+            loading={loading}
+            title="Enroll All"
+            loadingText="Enrolling All..."
+            icon="team"
+            colors={['#4CAF50', '#45a049']}
+            style={styles.enrollAllButton}
+            disabled={filteredStudents.length === 0}
+          />
+
           <TouchableOpacity
-            style={styles.studentItem}
-            onPress={() => toggleStudentSelection(item.id)}
+            style={[styles.closeButton, loading && styles.disabledButton]}
+            onPress={onClose}
+            disabled={loading}
           >
-            <View>
-              <Text style={styles.studentName}>{item.firstName} {item.lastName}</Text>
-              <Text style={styles.studentType}>{item.type || 'Regular'}</Text>
-            </View>
-            {selectedStudents.includes(item.id) && <Text style={styles.checkmark}>✓</Text>}
+            <Text style={styles.closeButtonText}>Close</Text>
           </TouchableOpacity>
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>No available students to enroll.</Text>}
-      />
+        </View>
+      </View>
 
-      <LoadingButton
-        onPress={handleEnrollStudents}
-        loading={loading}
-        title="Enroll Selected"
-        loadingText="Enrolling..."
-        icon="adduser"
-        colors={['#162447', '#1e3a5f']}
-        style={styles.enrollButton}
-        disabled={selectedStudents.length === 0}
-      />
-
-      <LoadingButton
-        onPress={handleEnrollAll}
-        loading={loading}
-        title="Enroll All"
-        loadingText="Enrolling All..."
-        icon="team"
-        colors={['#4CAF50', '#45a049']}
-        style={styles.enrollAllButton}
-        disabled={filteredStudents.length === 0}
-      />
-
-      <TouchableOpacity 
-        style={[styles.closeButton, loading && styles.disabledButton]} 
-        onPress={onClose}
-        disabled={loading}
-      >
-        <Text style={styles.closeButtonText}>Close</Text>
-      </TouchableOpacity>
-    </View>
-    
-    {loading && (
-      <LoadingScreen
-        overlay={true}
-        text="Enrolling students..."
-        size="large"
-      />
-    )}
+      {loading && (
+        <LoadingScreen
+          overlay={true}
+          text="Enrolling students..."
+          size="large"
+        />
+      )}
     </Modal>
   );
 };
@@ -145,7 +152,7 @@ const EnrollStudentsModal = ({ programId, onClose, visible }) => {
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
     backgroundColor: "white",
   },
   title: {
@@ -160,24 +167,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
     marginVertical: 10,
+    color: "#000",
+  },
+  list: {
+    flex: 1,
+    minHeight: 0,
   },
   studentItem: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#ccc",
   },
+  studentInfo: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  footer: {
+    paddingTop: 8,
+  },
   enrollButton: {
-    backgroundColor:  "#162447",
+    backgroundColor: "#162447",
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
     marginTop: 10,
-  },
-  enrollButtonText: {
-    color: "white",
-    fontSize: 16,
   },
   enrollAllButton: {
     backgroundColor: "green",
@@ -185,10 +202,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginTop: 10,
-  },
-  enrollAllButtonText: {
-    color: "white",
-    fontSize: 16,
   },
   closeButton: {
     backgroundColor: "red",
