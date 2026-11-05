@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -32,6 +32,8 @@ const EditAttendanceModal = ({
   const [showClassTimePicker, setShowClassTimePicker] = useState(false);
   const [localRecord, setLocalRecord] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef(null);
 
   // Sync local copy when the record updates (e.g. Present/Absent),
   // but only clear search when opening a different attendance record.
@@ -43,6 +45,7 @@ const EditAttendanceModal = ({
 
   useEffect(() => {
     setSearchQuery('');
+    setSearchOpen(false);
   }, [selectedRecord?.id]);
 
   const filteredMembers = useMemo(() => {
@@ -58,6 +61,23 @@ const EditAttendanceModal = ({
     });
   }, [localRecord, selectedRecord, members, searchQuery]);
 
+  const openSearch = () => {
+    setSearchOpen(true);
+    setTimeout(() => searchInputRef.current?.focus?.(), 50);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
+  };
+
+  const handleClose = () => {
+    if (saving) return;
+    setSearchOpen(false);
+    setSearchQuery('');
+    onClose();
+  };
+
   if (!selectedRecord || !localRecord) return null;
 
   const editDeadline = getAttendanceEditDeadline(
@@ -69,11 +89,6 @@ const EditAttendanceModal = ({
   const getProgramName = (programId) => {
     const program = programs.find(p => p.id === programId);
     return program ? program.name : 'Unknown Program';
-  };
-
-  const getMemberName = (memberId) => {
-    const member = members.find(m => m.id === memberId);
-    return member ? `${member.firstName} ${member.lastName}` : 'Unknown Member';
   };
 
   const handleTimeSelection = (memberId) => {
@@ -105,6 +120,8 @@ const EditAttendanceModal = ({
       localRecord?.lateAfterMinutes ?? 0,
     );
   };
+
+  const totalMembers = (localRecord.members || selectedRecord.members || []).length;
 
   const renderMemberItem = ({ item }) => {
     const member = members.find(m => m.id === item.memberId);
@@ -193,20 +210,79 @@ const EditAttendanceModal = ({
     <Modal visible={visible} animationType="slide" transparent={true}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
-          {/* Header */}
           <LinearGradient
             colors={['#667eea', '#764ba2']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
             style={styles.header}
           >
-            <Text style={styles.headerTitle}>Edit Attendance</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Icon name="close" size={24} color="white" />
-            </TouchableOpacity>
+            <View style={styles.headerLeft}>
+              {searchOpen ? (
+                <View style={styles.headerSearchBox}>
+                  <Icon name="search" size={18} color="#495057" />
+                  <TextInput
+                    ref={searchInputRef}
+                    style={styles.headerSearchInput}
+                    placeholder="Search student..."
+                    placeholderTextColor="#868e96"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    selectionColor="#667eea"
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setSearchQuery('')}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Icon name="cancel" size={18} color="#868e96" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.headerTitle} numberOfLines={1}>
+                  Edit Attendance
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                onPress={searchOpen ? closeSearch : openSearch}
+                style={styles.headerIconButton}
+                activeOpacity={0.8}
+              >
+                <Icon name={searchOpen ? 'close' : 'search'} size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveUpdatedAttendance}
+                disabled={saving}
+                style={[styles.headerSaveButton, saving && styles.headerSaveButtonDisabled]}
+                activeOpacity={0.8}
+              >
+                {saving ? (
+                  <Text style={styles.headerSaveText}>Saving...</Text>
+                ) : (
+                  <>
+                    <Icon name="save" size={16} color="white" />
+                    <Text style={styles.headerSaveText}>Save</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.closeButton}
+                activeOpacity={0.7}
+                disabled={saving}
+              >
+                <Icon name="close" size={22} color="white" />
+              </TouchableOpacity>
+            </View>
           </LinearGradient>
 
-          {/* Content */}
           <View style={styles.content}>
-            {/* Record Info */}
             <View style={styles.recordInfo}>
               <Text style={styles.programName}>{getProgramName(selectedRecord.programId)}</Text>
               <Text style={styles.recordDate}>
@@ -218,7 +294,6 @@ const EditAttendanceModal = ({
                 })}
               </Text>
               
-              {/* Class Start Time */}
               <TouchableOpacity 
                 onPress={() => setShowClassTimePicker(true)}
                 style={styles.classTimeButton}
@@ -237,69 +312,25 @@ const EditAttendanceModal = ({
               )}
             </View>
 
-            <View style={styles.searchContainer}>
-              <Icon name="search" size={18} color="#6c757d" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search student..."
-                placeholderTextColor="#adb5bd"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Icon name="cancel" size={18} color="#adb5bd" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Members List */}
             <Text style={styles.sectionTitle}>
-              Students ({filteredMembers.length}/{(localRecord.members || selectedRecord.members).length})
+              Students ({filteredMembers.length}/{totalMembers})
             </Text>
             <FlatList
               data={filteredMembers}
               keyExtractor={(item) => item.memberId}
               renderItem={renderMemberItem}
               style={styles.membersList}
+              contentContainerStyle={styles.membersListContent}
               keyboardShouldPersistTaps="handled"
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               ListEmptyComponent={
                 <Text style={styles.emptySearch}>No students match your search</Text>
               }
             />
-
-            {/* Action Buttons */}
-            <View style={styles.actionButtonsContainer}>
-              <TouchableOpacity 
-                onPress={onClose} 
-                style={[styles.cancelButton, saving && styles.disabledButton]}
-                disabled={saving}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={handleSaveUpdatedAttendance} 
-                style={styles.saveButton}
-                disabled={saving}
-              >
-                <LinearGradient
-                  colors={saving ? ['#e9ecef', '#dee2e6'] : ['#43e97b', '#38f9d7']}
-                  style={styles.saveButtonGradient}
-                >
-                  <Text style={[styles.saveButtonText, saving && styles.disabledButtonText]}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </View>
 
-      {/* Time Pickers */}
       {showTimePicker && (
         <DateTimePicker
           value={new Date()}
@@ -333,7 +364,8 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: width * 0.9,
-    maxHeight: '80%',
+    height: '85%',
+    maxHeight: '85%',
     backgroundColor: 'white',
     borderRadius: 20,
     overflow: 'hidden',
@@ -342,21 +374,85 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  headerLeft: {
+    flex: 1,
+    marginRight: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
   },
+  headerSearchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    minHeight: 38,
+  },
+  headerSearchInput: {
+    flex: 1,
+    color: '#212529',
+    fontSize: 15,
+    fontWeight: '500',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 18,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  headerSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginRight: 8,
+  },
+  headerSaveButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  headerSaveText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 13,
+    marginLeft: 4,
+  },
   closeButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
     padding: 5,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
-    padding: 20,
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   recordInfo: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   programName: {
     fontSize: 18,
@@ -390,24 +486,6 @@ const styles = StyleSheet.create({
     color: '#4da0b0',
     fontWeight: '500',
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-    minHeight: 44,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 15,
-    color: '#343a40',
-    paddingVertical: 8,
-  },
   emptySearch: {
     textAlign: 'center',
     color: '#adb5bd',
@@ -417,11 +495,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#343a40',
-    marginBottom: 15,
+    marginBottom: 10,
   },
   membersList: {
-    maxHeight: 300,
-    marginBottom: 20,
+    flex: 1,
+    minHeight: 0,
+  },
+  membersListContent: {
+    paddingBottom: 16,
   },
   memberRow: {
     flexDirection: 'column',
@@ -509,44 +590,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#e9ecef',
     marginVertical: 8,
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 12,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#6c757d',
-    fontWeight: '500',
-  },
-  saveButton: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  saveButtonGradient: {
-    padding: 15,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  disabledButtonText: {
-    color: '#6c757d',
   },
 });
 
