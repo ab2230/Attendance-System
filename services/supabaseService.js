@@ -801,6 +801,27 @@ class SupabaseService {
     return data || [];
   }
 
+  async listOrganizationTeam(organizationId) {
+    const { data, error } = await supabase.rpc('list_organization_team', {
+      p_organization_id: organizationId,
+    });
+    if (error) throw error;
+    if (!data?.ok) {
+      throw new Error(data?.error || 'Failed to load team');
+    }
+    const members = (data.members || []).map((row) => ({
+      ...row,
+      kind: 'member',
+      status: 'active',
+    }));
+    const invites = (data.invites || []).map((row) => ({
+      ...row,
+      kind: 'invite',
+      status: 'pending',
+    }));
+    return [...members, ...invites];
+  }
+
   async getOrganizationInvitations(organizationId) {
     const { data, error } = await supabase
       .from('organization_invitations')
@@ -812,15 +833,42 @@ class SupabaseService {
     return data || [];
   }
 
-  async removeOrganizationMember(organizationId, userId) {
-    const { error } = await supabase
-      .from('organization_members')
-      .delete()
-      .eq('organization_id', organizationId)
-      .eq('user_id', userId)
-      .eq('is_owner', false);
-
+  async updateOrganizationMemberPermissions(organizationId, userId, permissions) {
+    const { data, error } = await supabase.rpc('update_organization_member_permissions', {
+      p_organization_id: organizationId,
+      p_user_id: userId,
+      p_permissions: permissions,
+    });
     if (error) throw error;
+    return data;
+  }
+
+  async removeOrganizationMember(organizationId, userId) {
+    const { data, error } = await supabase.rpc('remove_organization_member', {
+      p_organization_id: organizationId,
+      p_user_id: userId,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async updateOrganizationInvitationPermissions(organizationId, invitationId, permissions) {
+    const { data, error } = await supabase.rpc('update_organization_invitation_permissions', {
+      p_organization_id: organizationId,
+      p_invitation_id: invitationId,
+      p_permissions: permissions,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async revokeOrganizationInvitation(organizationId, invitationId) {
+    const { data, error } = await supabase.rpc('revoke_organization_invitation', {
+      p_organization_id: organizationId,
+      p_invitation_id: invitationId,
+    });
+    if (error) throw error;
+    return data;
   }
 
   // Utility methods

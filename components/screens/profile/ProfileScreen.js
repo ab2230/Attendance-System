@@ -21,8 +21,35 @@ import { ProgramContext } from '../../context/ProgramContext';
 import { AttendanceContext } from '../../context/AttendanceContext';
 import AppTheme from '../../theme/appTheme';
 import OrganizationInviteModal from './OrganizationInviteModal';
+import OrganizationMemberModal from './OrganizationMemberModal';
 import PasswordInput from '../../common/PasswordInput';
 import supabaseService from '../../../services/supabaseService';
+
+const AVATAR_COLORS = ['#4da0b0', '#667eea', '#9b59b6', '#43e97b', '#f39c12', '#e74c3c'];
+
+function avatarColorFor(seed = '') {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function teamDisplayName(row) {
+  const full = `${row?.first_name || ''} ${row?.last_name || ''}`.trim();
+  if (full) return full;
+  if (row?.email) return row.email.split('@')[0];
+  return 'Teammate';
+}
+
+function teamInitials(row) {
+  const first = (row?.first_name || '').trim();
+  const last = (row?.last_name || '').trim();
+  if (first || last) {
+    return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase() || first.charAt(0).toUpperCase();
+  }
+  return ((row?.email || '?').charAt(0) || '?').toUpperCase();
+}
 
 const ProfileScreen = () => {
   const { user, signOut, loading, changePassword } = useContext(AuthContext);
@@ -51,6 +78,7 @@ const ProfileScreen = () => {
   const [inviteVisible, setInviteVisible] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [selectedTeamMember, setSelectedTeamMember] = useState(null);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -59,6 +87,7 @@ const ProfileScreen = () => {
 
   const displayName = user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || 'No email';
+  const canManageTeam = can('organization', 'update');
 
   const loadTeam = useCallback(async () => {
     if (!activeOrganization?.id || !can('organization', 'read')) {
@@ -67,10 +96,28 @@ const ProfileScreen = () => {
     }
     try {
       setTeamLoading(true);
-      const rows = await supabaseService.getOrganizationMembers(activeOrganization.id);
+      const rows = await supabaseService.listOrganizationTeam(activeOrganization.id);
       setTeamMembers(rows);
     } catch (e) {
       console.error(e);
+      // Fallback if migration RPC is not applied yet
+      try {
+        const rows = await supabaseService.getOrganizationMembers(activeOrganization.id);
+        setTeamMembers(
+          (rows || []).map((row) => ({
+            kind: 'member',
+            status: 'active',
+            user_id: row.user_id,
+            is_owner: row.is_owner,
+            permissions: row.permissions,
+            email: row.profiles?.email || null,
+            first_name: row.profiles?.first_name || null,
+            last_name: row.profiles?.last_name || null,
+          })),
+        );
+      } catch (fallbackError) {
+        console.error(fallbackError);
+      }
     } finally {
       setTeamLoading(false);
     }
@@ -159,6 +206,82 @@ const ProfileScreen = () => {
         ? 'They will join when they sign up with that email.'
         : 'Member was added to your organization.',
     );
+  };
+
+  const teamErrorMessage = (code, fallback) => {
+    switch (code) {
+      case 'forbidden':
+        return 'You do not have permission to manage the team.';
+      case 'cannot_edit_owner':
+      case 'cannot_remove_owner':
+        return 'The organization owner cannot be changed this way.';
+      case 'cannot_edit_self':
+      case 'cannot_remove_self':
+        return 'You cannot change your own membership here.';
+      case 'not_found':
+        return 'That teammate or invite was not found.';
+      default:
+        return fallback;
+    }
+  };
+
+  const handleSaveTeamAccess = async (member, permissions) => {
+    if (!activeOrganization?.id) return;
+    try {
+      let result;
+      if (member.kind === 'invite') {
+        result = await supabaseService.updateOrganizationInvitationPermissions(
+          activeOrganization.id,
+          member.invitation_id,
+          permissions,
+        );
+      } else {
+        result = await supabaseService.updateOrganizationMemberPermissions(
+          activeOrganization.id,
+          member.user_id,
+          permissions,
+        );
+      }
+      if (!result?.ok) {
+        Alert.alert('Update failed', teamErrorMessage(result?.error, result?.error || 'Could not update access.'));
+        return;
+      }
+      await loadTeam();
+      setSelectedTeamMember(null);
+      Alert.alert('Updated', 'Access permissions were saved.');
+    } catch (e) {
+      Alert.alert('Update failed', e.message || 'Could not update access.');
+    }
+  };
+
+  const handleRemoveTeamMember = async (member) => {
+    if (!activeOrganization?.id) return;
+    try {
+      let result;
+      if (member.kind === 'invite') {
+        result = await supabaseService.revokeOrganizationInvitation(
+          activeOrganization.id,
+          member.invitation_id,
+        );
+      } else {
+        result = await supabaseService.removeOrganizationMember(
+          activeOrganization.id,
+          member.user_id,
+        );
+      }
+      if (!result?.ok) {
+        Alert.alert('Remove failed', teamErrorMessage(result?.error, result?.error || 'Could not remove.'));
+        return;
+      }
+      await loadTeam();
+      setSelectedTeamMember(null);
+      Alert.alert(
+        'Done',
+        member.kind === 'invite' ? 'Invite was revoked.' : 'Teammate was removed from the organization.',
+      );
+    } catch (e) {
+      Alert.alert('Remove failed', e.message || 'Could not remove.');
+    }
   };
 
   const resetPasswordFields = () => {
@@ -303,23 +426,39 @@ const ProfileScreen = () => {
                     <ActivityIndicator color={AppTheme.accent} size="small" />
                   ) : (
                     teamMembers.map((row) => {
-                      const profile = row.profiles;
-                      const label =
-                        profile?.email ||
-                        `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
-                        row.user_id?.slice(0, 8);
+                      const name = teamDisplayName(row);
+                      const email = row.email || '';
+                      const pending = row.kind === 'invite' || row.status === 'pending';
+                      const key = row.user_id || row.invitation_id || email;
                       return (
-                        <View key={row.user_id} style={styles.teamRow}>
-                          <Icon
-                            name={row.is_owner ? 'crown' : 'account'}
-                            size={18}
-                            color={row.is_owner ? AppTheme.accent : AppTheme.textMuted}
-                          />
-                          <Text style={styles.teamName}>{label}</Text>
+                        <TouchableOpacity
+                          key={key}
+                          style={styles.teamRow}
+                          onPress={() => setSelectedTeamMember(row)}
+                          activeOpacity={0.75}
+                        >
+                          <View
+                            style={[
+                              styles.teamAvatar,
+                              { backgroundColor: avatarColorFor(email || key) },
+                            ]}
+                          >
+                            <Text style={styles.teamAvatarText}>{teamInitials(row)}</Text>
+                          </View>
+                          <View style={styles.teamTextBlock}>
+                            <Text style={styles.teamName} numberOfLines={1}>{name}</Text>
+                            {email ? (
+                              <Text style={styles.teamEmail} numberOfLines={1}>{email}</Text>
+                            ) : null}
+                          </View>
                           {row.is_owner ? (
                             <Text style={styles.teamBadge}>Owner</Text>
-                          ) : null}
-                        </View>
+                          ) : pending ? (
+                            <Text style={styles.teamPendingBadge}>Pending</Text>
+                          ) : (
+                            <Icon name="chevron-right" size={20} color={AppTheme.textMuted} />
+                          )}
+                        </TouchableOpacity>
                       );
                     })
                   )}
@@ -505,6 +644,15 @@ const ProfileScreen = () => {
         onClose={() => setInviteVisible(false)}
         onSubmit={handleInviteSubmit}
       />
+
+      <OrganizationMemberModal
+        visible={!!selectedTeamMember}
+        member={selectedTeamMember}
+        canManage={canManageTeam}
+        onClose={() => setSelectedTeamMember(null)}
+        onSave={handleSaveTeamAccess}
+        onRemove={handleRemoveTeamMember}
+      />
     </View>
   );
 };
@@ -654,17 +802,44 @@ const styles = StyleSheet.create({
   teamRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    gap: 8,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  teamAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  teamAvatarText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  teamTextBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   teamName: {
-    flex: 1,
     color: AppTheme.textPrimary,
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  teamEmail: {
+    color: AppTheme.textMuted,
+    fontSize: 12,
+    marginTop: 2,
   },
   teamBadge: {
     fontSize: 12,
     color: AppTheme.accent,
+    fontWeight: '600',
+  },
+  teamPendingBadge: {
+    fontSize: 12,
+    color: '#f39c12',
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
