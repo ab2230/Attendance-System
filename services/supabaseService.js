@@ -1,5 +1,9 @@
 import { supabase } from '../supabase-client';
 import { buildOwnerPermissions } from '../utils/organizationPermissions';
+import {
+  applyPermissionsToMembers,
+  toPermissionDateKey,
+} from '../components/utils/attendancePermissions';
 
 class SupabaseService {
   _activeOrganizationId = null;
@@ -452,20 +456,56 @@ class SupabaseService {
     }
   }
 
+  async _resolveMembersWithPermissions(attendanceData) {
+    const dateKey = toPermissionDateKey(attendanceData.date);
+    let permissions = [];
+    try {
+      permissions = await this.getAttendancePermissionsForDate(
+        attendanceData.programId,
+        dateKey,
+      );
+    } catch (error) {
+      // Permissions table may not be migrated yet — continue without applying.
+      console.warn('Could not load attendance permissions:', error?.message || error);
+    }
+
+    const lateAfter = Math.max(0, Number(attendanceData.lateAfterMinutes) || 0);
+    return applyPermissionsToMembers(attendanceData.members || [], permissions, {
+      classStartTime: attendanceData.classStartTime,
+      lateAfterMinutes: lateAfter,
+    });
+  }
+
+  _mapEntryForInsert(recordId, member) {
+    return {
+      attendance_record_id: recordId,
+      member_id: member.memberId,
+      status: member.status,
+      arrival_time: member.arrivalTime,
+      is_late: Boolean(member.isLate),
+      excused_late: Boolean(member.excusedLate),
+    };
+  }
+
   async saveAttendanceRecord(attendanceData) {
     try {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Create attendance record
       const orgId = this._requireOrgId();
+      const dateKey = toPermissionDateKey(attendanceData.date);
+      const members = await this._resolveMembersWithPermissions({
+        ...attendanceData,
+        date: dateKey,
+      });
+
       const { data: record, error: recordError } = await supabase
         .from('attendance_records')
         .insert([{
           user_id: user.id,
           organization_id: orgId,
           program_id: attendanceData.programId,
-          date: new Date(attendanceData.date).toISOString().split('T')[0],
+          date: dateKey,
           class_start_time: attendanceData.classStartTime,
           max_late_minutes: Number(attendanceData.maxLateMinutes) || 60,
           late_after_minutes: Math.max(0, Number(attendanceData.lateAfterMinutes) || 0),
@@ -475,14 +515,7 @@ class SupabaseService {
 
       if (recordError) throw recordError;
 
-      // Create attendance entries
-      const entries = attendanceData.members.map(member => ({
-        attendance_record_id: record.id,
-        member_id: member.memberId,
-        status: member.status,
-        arrival_time: member.arrivalTime,
-        is_late: member.isLate
-      }));
+      const entries = members.map((member) => this._mapEntryForInsert(record.id, member));
 
       const { data: entriesData, error: entriesError } = await supabase
         .from('attendance_entries')
@@ -500,11 +533,29 @@ class SupabaseService {
 
   async updateAttendanceRecord(recordId, attendanceData) {
     try {
-      // Update attendance record
+      const dateKey = toPermissionDateKey(attendanceData.date);
+
+      let programId = attendanceData.programId;
+      if (!programId) {
+        const { data: existing, error: existingError } = await supabase
+          .from('attendance_records')
+          .select('program_id')
+          .eq('id', recordId)
+          .single();
+        if (existingError) throw existingError;
+        programId = existing.program_id;
+      }
+
+      const resolvedMembers = await this._resolveMembersWithPermissions({
+        ...attendanceData,
+        programId,
+        date: dateKey,
+      });
+
       const { data: record, error: recordError } = await supabase
         .from('attendance_records')
         .update({
-          date: new Date(attendanceData.date).toISOString().split('T')[0],
+          date: dateKey,
           class_start_time: attendanceData.classStartTime,
           ...(attendanceData.maxLateMinutes != null
             ? { max_late_minutes: Number(attendanceData.maxLateMinutes) || 60 }
@@ -521,20 +572,12 @@ class SupabaseService {
 
       if (recordError) throw recordError;
 
-      // Delete existing entries
       await supabase
         .from('attendance_entries')
         .delete()
         .eq('attendance_record_id', recordId);
 
-      // Create new entries
-      const entries = attendanceData.members.map(member => ({
-        attendance_record_id: recordId,
-        member_id: member.memberId,
-        status: member.status,
-        arrival_time: member.arrivalTime,
-        is_late: member.isLate
-      }));
+      const entries = resolvedMembers.map((member) => this._mapEntryForInsert(recordId, member));
 
       const { data: entriesData, error: entriesError } = await supabase
         .from('attendance_entries')
@@ -593,11 +636,13 @@ class SupabaseService {
 
       const now = new Date();
       const classStartTime = now.toTimeString().slice(0, 8);
+      // Start Absent; saveAttendanceRecord applies excused_absence → Excused automatically.
       const members = enrollments.map((e) => ({
         memberId: e.member_id,
         status: 'Absent',
         arrivalTime: null,
         isLate: false,
+        excusedLate: false,
       }));
 
       const { record } = await this.saveAttendanceRecord({
@@ -685,7 +730,7 @@ class SupabaseService {
     try {
       const { data, error } = await supabase
         .from('attendance_entries')
-        .select('id, member_id, status, arrival_time, is_late, members(first_name, last_name)')
+        .select('id, member_id, status, arrival_time, is_late, excused_late, members(first_name, last_name)')
         .eq('attendance_record_id', attendanceRecordId)
         .order('status', { ascending: true });
 
@@ -700,6 +745,145 @@ class SupabaseService {
       console.error('Get attendance room entries error:', error);
       throw error;
     }
+  }
+
+  // Attendance permissions (excused absence / lateness)
+  _mapAttendancePermission(row) {
+    if (!row) return null;
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      programId: row.program_id,
+      memberId: row.member_id,
+      permissionDate: row.permission_date,
+      permissionType: row.permission_type,
+      reason: row.reason || '',
+      createdByUserId: row.created_by_user_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      programName: row.programs?.name || null,
+      memberFirstName: row.members?.first_name || '',
+      memberLastName: row.members?.last_name || '',
+    };
+  }
+
+  async getAttendancePermissions({ programId = null, startDate = null, endDate = null } = {}) {
+    const orgId = this._requireOrgId();
+    let query = supabase
+      .from('attendance_permissions')
+      .select(`
+        *,
+        programs (name),
+        members (first_name, last_name)
+      `)
+      .eq('organization_id', orgId)
+      .order('permission_date', { ascending: false });
+
+    if (programId) query = query.eq('program_id', programId);
+    if (startDate) query = query.gte('permission_date', toPermissionDateKey(startDate));
+    if (endDate) query = query.lte('permission_date', toPermissionDateKey(endDate));
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map((row) => this._mapAttendancePermission(row));
+  }
+
+  async getAttendancePermissionsForDate(programId, date) {
+    const orgId = this._requireOrgId();
+    const dateKey = toPermissionDateKey(date);
+    const { data, error } = await supabase
+      .from('attendance_permissions')
+      .select('*')
+      .eq('organization_id', orgId)
+      .eq('program_id', programId)
+      .eq('permission_date', dateKey);
+
+    if (error) throw error;
+    return (data || []).map((row) => this._mapAttendancePermission(row));
+  }
+
+  async createAttendancePermission({
+    programId,
+    memberId,
+    permissionDate,
+    permissionType,
+    reason = '',
+  }) {
+    const user = await this.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+    const orgId = this._requireOrgId();
+
+    const payload = {
+      organization_id: orgId,
+      program_id: programId,
+      member_id: memberId,
+      permission_date: toPermissionDateKey(permissionDate),
+      permission_type: permissionType,
+      reason: String(reason || '').trim() || null,
+      created_by_user_id: user.id,
+    };
+
+    const { data, error } = await supabase
+      .from('attendance_permissions')
+      .insert([payload])
+      .select(`
+        *,
+        programs (name),
+        members (first_name, last_name)
+      `)
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('A permission already exists for this member, program, and date.');
+      }
+      throw error;
+    }
+    return this._mapAttendancePermission(data);
+  }
+
+  async updateAttendancePermission(permissionId, {
+    permissionType,
+    permissionDate,
+    reason,
+    programId,
+    memberId,
+  }) {
+    const updates = {
+      updated_at: new Date().toISOString(),
+    };
+    if (permissionType != null) updates.permission_type = permissionType;
+    if (permissionDate != null) updates.permission_date = toPermissionDateKey(permissionDate);
+    if (reason !== undefined) updates.reason = String(reason || '').trim() || null;
+    if (programId != null) updates.program_id = programId;
+    if (memberId != null) updates.member_id = memberId;
+
+    const { data, error } = await supabase
+      .from('attendance_permissions')
+      .update(updates)
+      .eq('id', permissionId)
+      .select(`
+        *,
+        programs (name),
+        members (first_name, last_name)
+      `)
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('A permission already exists for this member, program, and date.');
+      }
+      throw error;
+    }
+    return this._mapAttendancePermission(data);
+  }
+
+  async deleteAttendancePermission(permissionId) {
+    const { error } = await supabase
+      .from('attendance_permissions')
+      .delete()
+      .eq('id', permissionId);
+    if (error) throw error;
   }
 
   // Organization methods

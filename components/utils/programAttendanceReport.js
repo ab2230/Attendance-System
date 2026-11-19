@@ -1,4 +1,10 @@
 import { isArrivalLate } from './attendanceLate';
+import {
+  ATTENDANCE_STATUS,
+  isExcusedAbsenceEntry,
+  isExcusedLatenessEntry,
+  isPenalizedLateEntry,
+} from './attendancePermissions';
 
 export function toDateKey(date) {
   if (!date) return '';
@@ -9,8 +15,44 @@ export function toDateKey(date) {
   return d.toISOString().split('T')[0];
 }
 
-export function entryCountsAsAttended(entry, record, excludeLate) {
-  if (!entry || entry.status !== 'Present') return false;
+/**
+ * Whether this entry counts toward "attended" for report totals.
+ *
+ * @param {object} options
+ * @param {boolean} options.excludeLate - exclude penalized late (not excused late)
+ * @param {boolean} options.countExcusedAbsences - excused absence counts as attended
+ * @param {boolean} options.countExcusedLateness - excused late counts as attended (default true)
+ * @param {boolean} options.excludeExcusedRecords - ignore any excused absence/lateness entry
+ */
+export function entryCountsAsAttended(entry, record, options = {}) {
+  const {
+    excludeLate = false,
+    countExcusedAbsences = false,
+    countExcusedLateness = true,
+    excludeExcusedRecords = false,
+  } = typeof options === 'boolean'
+    ? { excludeLate: options } // backward compatible: old callers passed boolean
+    : options;
+
+  if (!entry) return false;
+
+  const excusedAbsence = isExcusedAbsenceEntry(entry);
+  const excusedLate = isExcusedLatenessEntry(entry);
+
+  if (excludeExcusedRecords && (excusedAbsence || excusedLate)) {
+    return false;
+  }
+
+  if (excusedAbsence) {
+    return Boolean(countExcusedAbsences);
+  }
+
+  if (entry.status !== ATTENDANCE_STATUS.PRESENT) return false;
+
+  if (excusedLate) {
+    return Boolean(countExcusedLateness);
+  }
+
   if (!excludeLate) return true;
 
   if (entry.isLate === true) return false;
@@ -25,7 +67,7 @@ export function entryCountsAsAttended(entry, record, excludeLate) {
 }
 
 /**
- * @returns {{ rows: Array<{ member, attended, totalSessions }>, totalSessions: number }}
+ * Per-member breakdown for a date range.
  */
 export function buildProgramAttendanceReport({
   attendanceRecords,
@@ -35,6 +77,9 @@ export function buildProgramAttendanceReport({
   startDateKey,
   endDateKey,
   excludeLate,
+  countExcusedAbsences = false,
+  countExcusedLateness = true,
+  excludeExcusedRecords = false,
   minAttendance,
 }) {
   if (!programId || !startDateKey || !endDateKey) {
@@ -52,16 +97,52 @@ export function buildProgramAttendanceReport({
 
   const totalSessions = recordsInRange.length;
   const memberList = (members || []).filter((m) => enrolledMemberIds.includes(m.id));
+  const countOptions = {
+    excludeLate,
+    countExcusedAbsences,
+    countExcusedLateness,
+    excludeExcusedRecords,
+  };
 
   const rows = memberList.map((member) => {
     let attended = 0;
+    let present = 0;
+    let absent = 0;
+    let late = 0;
+    let excusedAbsence = 0;
+    let excusedLateness = 0;
+
     recordsInRange.forEach((record) => {
       const entry = record.members?.find((e) => e.memberId === member.id);
-      if (entryCountsAsAttended(entry, record, excludeLate)) {
+      if (!entry) return;
+
+      if (isExcusedAbsenceEntry(entry)) {
+        excusedAbsence += 1;
+      } else if (isExcusedLatenessEntry(entry)) {
+        excusedLateness += 1;
+        present += 1;
+      } else if (entry.status === ATTENDANCE_STATUS.PRESENT) {
+        present += 1;
+        if (isPenalizedLateEntry(entry, record)) late += 1;
+      } else if (entry.status === ATTENDANCE_STATUS.ABSENT) {
+        absent += 1;
+      }
+
+      if (entryCountsAsAttended(entry, record, countOptions)) {
         attended += 1;
       }
     });
-    return { member, attended, totalSessions };
+
+    return {
+      member,
+      attended,
+      totalSessions,
+      present,
+      absent,
+      late,
+      excusedAbsence,
+      excusedLateness,
+    };
   });
 
   const min = Number(minAttendance);

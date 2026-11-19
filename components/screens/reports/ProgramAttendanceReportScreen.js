@@ -40,6 +40,9 @@ const ProgramAttendanceReportScreen = () => {
   const [endDate, setEndDate] = useState(() => new Date());
   const [pickerMode, setPickerMode] = useState(null);
   const [excludeLate, setExcludeLate] = useState(false);
+  const [countExcusedAbsences, setCountExcusedAbsences] = useState(false);
+  const [countExcusedLateness, setCountExcusedLateness] = useState(true);
+  const [excludeExcusedRecords, setExcludeExcusedRecords] = useState(false);
   const [minAttendance, setMinAttendance] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -58,6 +61,9 @@ const ProgramAttendanceReportScreen = () => {
       startDateKey,
       endDateKey,
       excludeLate,
+      countExcusedAbsences,
+      countExcusedLateness,
+      excludeExcusedRecords,
       minAttendance,
     });
   }, [
@@ -68,6 +74,9 @@ const ProgramAttendanceReportScreen = () => {
     startDateKey,
     endDateKey,
     excludeLate,
+    countExcusedAbsences,
+    countExcusedLateness,
+    excludeExcusedRecords,
     minAttendance,
   ]);
 
@@ -106,6 +115,9 @@ const ProgramAttendanceReportScreen = () => {
       rows,
       totalSessions,
       excludeLate,
+      countExcusedAbsences,
+      countExcusedLateness,
+      excludeExcusedRecords,
       minAttendance,
     });
   };
@@ -132,8 +144,8 @@ const ProgramAttendanceReportScreen = () => {
         }
       >
         <Text style={styles.intro}>
-          See how many sessions each member attended in a date range. Late counts as attended unless
-          you turn on exclude late.
+          See how many sessions each member attended in a date range. Use the filters below to decide
+          how late and excused records affect the attended count.
         </Text>
 
         <CustomDropDown
@@ -169,13 +181,54 @@ const ProgramAttendanceReportScreen = () => {
           <View style={styles.switchRow}>
             <View style={styles.switchTextBlock}>
               <Text style={styles.filterTitle}>Exclude late</Text>
-              <Text style={styles.filterHint}>Only count on-time arrivals</Text>
+              <Text style={styles.filterHint}>Penalized late does not count as attended</Text>
             </View>
             <Switch
               value={excludeLate}
               onValueChange={setExcludeLate}
               trackColor={{ false: AppTheme.border, true: AppTheme.accentMuted }}
               thumbColor={excludeLate ? AppTheme.accent : '#ccc'}
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchTextBlock}>
+              <Text style={styles.filterTitle}>Count excused absences</Text>
+              <Text style={styles.filterHint}>Treat Excused as attended</Text>
+            </View>
+            <Switch
+              value={countExcusedAbsences}
+              onValueChange={setCountExcusedAbsences}
+              trackColor={{ false: AppTheme.border, true: AppTheme.accentMuted }}
+              thumbColor={countExcusedAbsences ? AppTheme.accent : '#ccc'}
+              disabled={excludeExcusedRecords}
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchTextBlock}>
+              <Text style={styles.filterTitle}>Count excused lateness</Text>
+              <Text style={styles.filterHint}>Excused late counts as attended</Text>
+            </View>
+            <Switch
+              value={countExcusedLateness}
+              onValueChange={setCountExcusedLateness}
+              trackColor={{ false: AppTheme.border, true: AppTheme.accentMuted }}
+              thumbColor={countExcusedLateness ? AppTheme.accent : '#ccc'}
+              disabled={excludeExcusedRecords}
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchTextBlock}>
+              <Text style={styles.filterTitle}>Exclude excused records</Text>
+              <Text style={styles.filterHint}>Ignore all permission-based entries in counts</Text>
+            </View>
+            <Switch
+              value={excludeExcusedRecords}
+              onValueChange={setExcludeExcusedRecords}
+              trackColor={{ false: AppTheme.border, true: AppTheme.accentMuted }}
+              thumbColor={excludeExcusedRecords ? AppTheme.accent : '#ccc'}
             />
           </View>
 
@@ -203,7 +256,7 @@ const ProgramAttendanceReportScreen = () => {
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={[styles.cellHeader, styles.nameCol]}>Member</Text>
-            <Text style={[styles.cellHeader, styles.countCol]}>Attended</Text>
+            <Text style={[styles.cellHeader, styles.countCol]}>Att.</Text>
             <Text style={[styles.cellHeader, styles.countCol]}>Of</Text>
           </View>
           {rows.length === 0 ? (
@@ -213,15 +266,29 @@ const ProgramAttendanceReportScreen = () => {
               </Text>
             </View>
           ) : (
-            rows.map(({ member, attended, totalSessions: total }) => (
-              <View key={member.id} style={styles.tableRow}>
-                <Text style={[styles.cellBody, styles.nameCol]} numberOfLines={2}>
-                  {member.firstName} {member.lastName}
+            rows.map(({
+              member,
+              attended,
+              totalSessions: total,
+              present,
+              absent,
+              late,
+              excusedAbsence,
+              excusedLateness,
+            }) => (
+              <View key={member.id} style={styles.memberBlock}>
+                <View style={styles.tableRow}>
+                  <Text style={[styles.cellBody, styles.nameCol]} numberOfLines={2}>
+                    {member.firstName} {member.lastName}
+                  </Text>
+                  <Text style={[styles.cellBody, styles.countCol, styles.countHighlight]}>
+                    {attended}
+                  </Text>
+                  <Text style={[styles.cellBody, styles.countCol]}>{total}</Text>
+                </View>
+                <Text style={styles.breakdown}>
+                  Present {present} · Absent {absent} · Late {late} · Excused Abs. {excusedAbsence} · Excused Late {excusedLateness}
                 </Text>
-                <Text style={[styles.cellBody, styles.countCol, styles.countHighlight]}>
-                  {attended}
-                </Text>
-                <Text style={[styles.cellBody, styles.countCol]}>{total}</Text>
               </View>
             ))
           )}
@@ -339,12 +406,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
   },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+  memberBlock: {
     borderTopWidth: 1,
     borderTopColor: AppTheme.border,
+    paddingBottom: 8,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  breakdown: {
+    paddingHorizontal: 10,
+    paddingBottom: 4,
+    color: AppTheme.textMuted,
+    fontSize: 11,
+    lineHeight: 16,
   },
   cellHeader: {
     color: AppTheme.accent,

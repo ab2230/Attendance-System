@@ -88,9 +88,13 @@ const AttendanceSummaryScreen = () => {
         const record = filteredRecords.find((r) => r.date === date);
         const found = record?.members.find((mm) => mm.memberId === m.id);
         attendanceMap[m.id][date] = found
-          ? found.isLate
-            ? "Late"
-            : found.status
+          ? found.status === 'Excused'
+            ? 'Excused'
+            : found.status === 'Present' && found.excusedLate
+              ? 'Excused Late'
+              : found.isLate
+                ? 'Late'
+                : found.status
           : "-";
       });
     });
@@ -107,6 +111,9 @@ const AttendanceSummaryScreen = () => {
         return { color: "#c92a2a" };
       case "Late":
         return { color: "#e67700" };
+      case "Excused":
+      case "Excused Late":
+        return { color: "#4da0b0" };
       default:
         return { color: "#868e96" };
     }

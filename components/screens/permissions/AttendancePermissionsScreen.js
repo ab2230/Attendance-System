@@ -1,0 +1,355 @@
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import TopNavigator from '../../common/TopNavigator';
+import AddButton from '../../common/addButton';
+import CustomDropDown from '../../common/CustomDropDown';
+import EmptyState from '../../common/EmptyState';
+import LoadingScreen from '../../common/LoadingScreen';
+import AppTheme from '../../theme/appTheme';
+import { ProgramContext } from '../../context/ProgramContext';
+import { MemberContext } from '../../context/MemberContext';
+import { OrganizationContext } from '../../context/OrganizationContext';
+import supabaseService from '../../../services/supabaseService';
+import { permissionTypeLabel } from '../../utils/attendancePermissions';
+import AttendancePermissionModal from './AttendancePermissionModal';
+
+const AttendancePermissionsScreen = ({ navigation, route }) => {
+  const initialProgramId = route?.params?.programId || null;
+  const { programs, loadPrograms } = useContext(ProgramContext);
+  const { members, loadMembers } = useContext(MemberContext);
+  const { can } = useContext(OrganizationContext);
+
+  const [permissions, setPermissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filterProgramId, setFilterProgramId] = useState(initialProgramId);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingPermission, setEditingPermission] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const canCreate = can('attendance', 'create');
+  const canUpdate = can('attendance', 'update');
+  const canDelete = can('attendance', 'delete');
+
+  const loadPermissions = useCallback(async () => {
+    const rows = await supabaseService.getAttendancePermissions({
+      programId: filterProgramId || null,
+    });
+    setPermissions(rows);
+  }, [filterProgramId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        // Programs/members are already in context from the Classes tab.
+        // Only refresh permissions here to avoid an effect loop on unstable loaders.
+        await loadPermissions();
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) {
+          setPermissions([]);
+          Alert.alert(
+            'Could not load permissions',
+            e.message?.includes('attendance_permissions') ||
+              e.code === '42P01' ||
+              e.code === 'PGRST205'
+              ? 'Run supabase/migrations/add_attendance_permissions.sql in the Supabase SQL Editor, then try again.'
+              : e.message || 'Failed to load permissions.',
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPermissions]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        typeof loadPrograms === 'function' ? loadPrograms() : Promise.resolve(),
+        typeof loadMembers === 'function' ? loadMembers() : Promise.resolve(),
+        loadPermissions(),
+      ]);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Refresh failed', e.message || 'Could not refresh permissions.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const programFilterOptions = useMemo(
+    () => [{ id: null, name: 'All programs' }, ...programs],
+    [programs],
+  );
+
+  const selectedFilterProgram =
+    programFilterOptions.find((p) => p.id === filterProgramId) || programFilterOptions[0];
+
+  const handleSave = async (payload) => {
+    if (payload.id) {
+      if (!canUpdate) throw new Error('You do not have permission to update.');
+      await supabaseService.updateAttendancePermission(payload.id, payload);
+    } else {
+      if (!canCreate) throw new Error('You do not have permission to create.');
+      await supabaseService.createAttendancePermission(payload);
+    }
+    await loadPermissions();
+  };
+
+  const handleDelete = (item) => {
+    if (!canDelete || deletingId) return;
+    const name = `${item.memberFirstName || ''} ${item.memberLastName || ''}`.trim() || 'Member';
+    Alert.alert(
+      'Revoke permission?',
+      `Remove ${permissionTypeLabel(item.permissionType)} for ${name} on ${item.permissionDate}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(item.id);
+            try {
+              await supabaseService.deleteAttendancePermission(item.id);
+              await loadPermissions();
+            } catch (e) {
+              Alert.alert('Error', e.message || 'Could not revoke permission.');
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const renderItem = ({ item }) => {
+    const name = `${item.memberFirstName || ''} ${item.memberLastName || ''}`.trim() || 'Member';
+    const isAbsence = item.permissionType === 'excused_absence';
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardTop}>
+          <View style={[styles.typeChip, isAbsence ? styles.absenceChip : styles.lateChip]}>
+            <Icon
+              name={isAbsence ? 'calendar-remove' : 'clock-outline'}
+              size={14}
+              color={isAbsence ? '#ff6b6b' : '#f39c12'}
+            />
+            <Text style={[styles.typeChipText, isAbsence ? styles.absenceText : styles.lateText]}>
+              {permissionTypeLabel(item.permissionType)}
+            </Text>
+          </View>
+          <Text style={styles.dateText}>{item.permissionDate}</Text>
+        </View>
+        <Text style={styles.memberName}>{name}</Text>
+        <Text style={styles.programName}>{item.programName || 'Program'}</Text>
+        {item.reason ? <Text style={styles.reason}>{item.reason}</Text> : null}
+
+        <View style={styles.actions}>
+          {canUpdate ? (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => {
+                setEditingPermission(item);
+                setModalVisible(true);
+              }}
+            >
+              <Icon name="pencil" size={16} color={AppTheme.accent} />
+              <Text style={styles.actionText}>Edit</Text>
+            </TouchableOpacity>
+          ) : null}
+          {canDelete ? (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => handleDelete(item)}
+              disabled={deletingId === item.id}
+            >
+              {deletingId === item.id ? (
+                <ActivityIndicator size="small" color={AppTheme.danger} />
+              ) : (
+                <>
+                  <Icon name="delete-outline" size={16} color={AppTheme.danger} />
+                  <Text style={[styles.actionText, { color: AppTheme.danger }]}>Revoke</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.screen}>
+        <TopNavigator title="Permissions" backButton navigation={navigation} />
+        <LoadingScreen text="Loading permissions..." backgroundColor={AppTheme.background} color={AppTheme.accent} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <TopNavigator title="Permissions" backButton navigation={navigation} />
+
+      <View style={styles.filterWrap}>
+        <CustomDropDown
+          label="Filter by program"
+          data={programFilterOptions}
+          currentSelected={selectedFilterProgram}
+          setSelected={(item) => setFilterProgramId(item.id)}
+          onDarkBackground
+        />
+      </View>
+
+      <FlatList
+        data={permissions}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppTheme.accent} />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="shield-check-outline"
+            title="No permissions yet"
+            message="Create an excused absence or excused lateness for a program member and date."
+          />
+        }
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+      />
+
+      {canCreate ? (
+        <AddButton
+          onClick={() => {
+            setEditingPermission(null);
+            setModalVisible(true);
+          }}
+          style={styles.addButton}
+        />
+      ) : null}
+
+      <AttendancePermissionModal
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingPermission(null);
+        }}
+        onSubmit={handleSave}
+        programs={programs}
+        members={members}
+        editingPermission={editingPermission}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: AppTheme.background,
+  },
+  filterWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 100,
+    flexGrow: 1,
+  },
+  card: {
+    backgroundColor: AppTheme.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    padding: 14,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  absenceChip: {
+    backgroundColor: 'rgba(255,107,107,0.12)',
+  },
+  lateChip: {
+    backgroundColor: 'rgba(243,156,18,0.15)',
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  absenceText: { color: '#ff6b6b' },
+  lateText: { color: '#f39c12' },
+  dateText: {
+    color: AppTheme.textMuted,
+    fontSize: 13,
+  },
+  memberName: {
+    color: AppTheme.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  programName: {
+    color: AppTheme.textSoft,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  reason: {
+    color: AppTheme.textMuted,
+    fontSize: 13,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionText: {
+    color: AppTheme.accent,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  addButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    backgroundColor: AppTheme.accent,
+  },
+});
+
+export default AttendancePermissionsScreen;

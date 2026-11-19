@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
 import { color, textStyles } from '../styles/Styles';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { scale } from '../styles/scaling';
@@ -21,13 +21,28 @@ const CustomDropDown = ({
   uneditableTextEntry = true,
   required, // Add the new required prop
   onDarkBackground = false,
+  searchable = false,
+  searchPlaceholder = 'Search...',
 }) => {
   const [isDroped, setIsDroped] = useState(false);
   const [currentItem, setCurrentItem] = useState(currentSelected);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     setCurrentItem(currentSelected);
   }, [currentSelected]);
+
+  useEffect(() => {
+    if (!isDroped) setSearchQuery('');
+  }, [isDroped]);
+
+  const filteredData = useMemo(() => {
+    if (!searchable || !searchQuery.trim()) return data || [];
+    const q = searchQuery.trim().toLowerCase();
+    return (data || []).filter((item) =>
+      String(item?.name || '').toLowerCase().includes(q),
+    );
+  }, [data, searchable, searchQuery]);
 
   const triggerBorder = onDarkBackground ? '#1f3460' : error ? color.red : color.deepLightGray;
   const valueColor =
@@ -43,6 +58,7 @@ const CustomDropDown = ({
   function handleOnPress(item) {
     setSelected && setSelected(item);
     setCurrentItem(item);
+    setSearchQuery('');
     setIsDroped(false);
   }
 
@@ -150,34 +166,85 @@ const CustomDropDown = ({
             marginTop: 10,
           }}
         >
-          <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
-            {data?.map((item, index) => {
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={{
-                    borderBottomWidth: index == data.length - 1 ? 0 : 2,
-                    borderColor: color.deepLightGray,
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                  }}
-                  onPress={() => handleOnPress(item)}
-                >
-                  <Text
-                    style={[
-                      textStyles.text_regular,
-                      { 
-                        backgroundColor: color.white,
-                        color: color.black,
-                        fontSize: 16,
-                      },
-                    ]}
-                  >
-                    {item.name}
-                  </Text>
+          {searchable ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                borderBottomWidth: 1,
+                borderBottomColor: color.deepLightGray,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
+            >
+              <Ionicons name="search" size={18} color={color.textGray} />
+              <TextInput
+                style={{
+                  flex: 1,
+                  marginLeft: 8,
+                  paddingVertical: 6,
+                  color: color.black,
+                  fontSize: 15,
+                }}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={searchPlaceholder}
+                placeholderTextColor={color.textGray}
+                autoCorrect={false}
+                autoCapitalize="none"
+                autoFocus
+              />
+              {searchQuery.length > 0 ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={color.textGray} />
                 </TouchableOpacity>
-              );
-            })}
+              ) : null}
+            </View>
+          ) : null}
+          <ScrollView style={{ maxHeight: searchable ? 200 : 150 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            {filteredData.length === 0 ? (
+              <Text
+                style={[
+                  textStyles.text_regular,
+                  {
+                    color: color.textGray,
+                    fontSize: 14,
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                  },
+                ]}
+              >
+                No matches
+              </Text>
+            ) : (
+              filteredData.map((item, index) => {
+                return (
+                  <TouchableOpacity
+                    key={item.id != null ? String(item.id) : `${item.name}-${index}`}
+                    style={{
+                      borderBottomWidth: index == filteredData.length - 1 ? 0 : 2,
+                      borderColor: color.deepLightGray,
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                    }}
+                    onPress={() => handleOnPress(item)}
+                  >
+                    <Text
+                      style={[
+                        textStyles.text_regular,
+                        { 
+                          backgroundColor: color.white,
+                          color: color.black,
+                          fontSize: 16,
+                        },
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </ScrollView>
         </View>
       )}

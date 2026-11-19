@@ -49,7 +49,8 @@ export const AttendanceProvider = ({ children }) => {
           status: entry.status,
           classId: entry.members?.class_id,
           arrivalTime: entry.arrival_time,
-          isLate: entry.is_late
+          isLate: entry.is_late,
+          excusedLate: Boolean(entry.excused_late),
         })) || []
       }));
       
@@ -78,7 +79,8 @@ export const AttendanceProvider = ({ children }) => {
           memberId: member.memberId,
           status: member.status,
           arrivalTime: member.arrivalTime,
-          isLate: member.isLate
+          isLate: member.isLate,
+          excusedLate: Boolean(member.excusedLate),
         }))
       };
       
@@ -104,11 +106,13 @@ export const AttendanceProvider = ({ children }) => {
         classStartTime: updatedRecord.classStartTime,
         maxLateMinutes: Number(updatedRecord.maxLateMinutes) || 60,
         lateAfterMinutes: Math.max(0, Number(updatedRecord.lateAfterMinutes) || 0),
+        programId: updatedRecord.programId,
         members: updatedRecord.members.map(member => ({
           memberId: member.memberId,
           status: member.status,
           arrivalTime: member.arrivalTime,
-          isLate: member.isLate
+          isLate: member.isLate,
+          excusedLate: Boolean(member.excusedLate),
         }))
       };
       
@@ -148,7 +152,8 @@ export const AttendanceProvider = ({ children }) => {
     const lateAfter = record.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES;
 
     return record.members.filter(member => 
-      member.status === 'Present' && 
+      member.status === 'Present' &&
+      !member.excusedLate &&
       member.arrivalTime && 
       isStudentLate(member.arrivalTime, startTime, lateAfter)
     );
@@ -159,11 +164,14 @@ export const AttendanceProvider = ({ children }) => {
     if (!record || !record.members) return [];
     
     const startTime = classStartTime || record.classStartTime;
-    if (!startTime) return record.members.filter(m => m.status === 'Present');
+    if (!startTime) {
+      return record.members.filter(m => m.status === 'Present' && !m.excusedLate);
+    }
     const lateAfter = record.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES;
 
     return record.members.filter(member => 
-      member.status === 'Present' && 
+      member.status === 'Present' &&
+      !member.excusedLate &&
       member.arrivalTime && 
       !isStudentLate(member.arrivalTime, startTime, lateAfter)
     );
@@ -176,6 +184,8 @@ export const AttendanceProvider = ({ children }) => {
     const total = record.members.length;
     const present = record.members.filter(m => m.status === 'Present').length;
     const absent = record.members.filter(m => m.status === 'Absent').length;
+    const excused = record.members.filter(m => m.status === 'Excused').length;
+    const excusedLate = record.members.filter(m => m.status === 'Present' && m.excusedLate).length;
     const late = getLateStudents(record).length;
     const onTime = getOnTimeStudents(record).length;
 
@@ -183,6 +193,8 @@ export const AttendanceProvider = ({ children }) => {
       total,
       present,
       absent,
+      excused,
+      excusedLate,
       late,
       onTime,
       presentPercentage: total > 0 ? Math.round((present / total) * 100) : 0,

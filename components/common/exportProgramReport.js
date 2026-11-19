@@ -8,6 +8,9 @@ export async function exportProgramReportTxt({
   rows,
   totalSessions,
   excludeLate,
+  countExcusedAbsences = false,
+  countExcusedLateness = true,
+  excludeExcusedRecords = false,
   minAttendance,
 }) {
   if (!rows.length) {
@@ -21,15 +24,29 @@ export async function exportProgramReportTxt({
   lines.push(`Date range: ${startDateKey} to ${endDateKey}`);
   lines.push(`Sessions in range: ${totalSessions}`);
   lines.push(`Exclude late from count: ${excludeLate ? 'Yes' : 'No'}`);
+  lines.push(`Count excused absences: ${countExcusedAbsences ? 'Yes' : 'No'}`);
+  lines.push(`Count excused lateness: ${countExcusedLateness ? 'Yes' : 'No'}`);
+  lines.push(`Exclude excused records: ${excludeExcusedRecords ? 'Yes' : 'No'}`);
   if (minAttendance && Number(minAttendance) > 0) {
     lines.push(`Minimum attendance filter: ${minAttendance}+`);
   }
   lines.push('');
-  lines.push('Name\tAttended\tSessions');
+  lines.push('Name\tAttended\tSessions\tPresent\tAbsent\tLate\tExcusedAbs\tExcusedLate');
 
-  rows.forEach(({ member, attended, totalSessions: total }) => {
+  rows.forEach(({
+    member,
+    attended,
+    totalSessions: total,
+    present = 0,
+    absent = 0,
+    late = 0,
+    excusedAbsence = 0,
+    excusedLateness = 0,
+  }) => {
     const name = `${member.firstName} ${member.lastName}`.trim();
-    lines.push(`${name}\t${attended}\t${total}`);
+    lines.push(
+      `${name}\t${attended}\t${total}\t${present}\t${absent}\t${late}\t${excusedAbsence}\t${excusedLateness}`,
+    );
   });
 
   const body = lines.join('\n');

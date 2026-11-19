@@ -137,6 +137,16 @@ const MembersInProgram = ({ route, navigation }) => {
     <View style={styles.container}>
       <TopNavigator title="Enrolled Students" backButton={true} navigation={navigation} />
 
+      <TouchableOpacity
+        style={styles.permissionsEntry}
+        onPress={() => navigation.navigate('AttendancePermissions', { programId })}
+        activeOpacity={0.8}
+      >
+        <Icon name="verified-user" size={18} color={AppTheme.accent} />
+        <Text style={styles.permissionsEntryText}>Permissions for this program</Text>
+        <Icon name="chevron-right" size={20} color={AppTheme.textMuted} />
+      </TouchableOpacity>
+
       {enrolledStudents.length > 0 && (
         <View style={styles.searchBox}>
           <Icon name="search" size={20} color={AppTheme.textMuted} />
@@ -201,6 +211,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AppTheme.background,
+  },
+  permissionsEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    gap: 10,
+  },
+  permissionsEntryText: {
+    flex: 1,
+    color: AppTheme.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
   },
   searchBox: {
     flexDirection: "row",

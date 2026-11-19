@@ -172,6 +172,8 @@ const AttendanceScreen = () => {
             selectedRecord.lateAfterMinutes ?? 0,
           );
         })(),
+        // Cleared here; save path re-applies standing permissions.
+        excusedLate: false,
       } : member
     );
     setSelectedRecord({ ...selectedRecord, members: updatedMembers });

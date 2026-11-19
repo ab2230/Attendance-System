@@ -127,25 +127,34 @@ const EditAttendanceModal = ({
     const member = members.find(m => m.id === item.memberId);
     const memberName = member ? `${member.firstName} ${member.lastName}` : 'Unknown';
     const isPresent = item.status === 'Present';
-    const studentIsLate = item.arrivalTime && localRecord.classStartTime && 
+    const isExcused = item.status === 'Excused';
+    const studentIsLate = isPresent && item.arrivalTime && localRecord.classStartTime && 
       isLate(item.arrivalTime, localRecord.classStartTime);
+    const lateLabel = item.excusedLate
+      ? '(Excused Late)'
+      : studentIsLate
+        ? '(Late)'
+        : '';
 
     return (
       <View style={styles.memberRow}>
         <View style={styles.memberInfo}>
           <Text style={styles.memberName} numberOfLines={2}>{memberName}</Text>
+          {isExcused ? (
+            <Text style={styles.excusedLabel}>Excused Absence</Text>
+          ) : null}
           {isPresent && item.arrivalTime && (
             <View style={styles.timeContainer}>
               <Icon 
-                name={studentIsLate ? "schedule" : "check-circle"} 
+                name={item.excusedLate || studentIsLate ? "schedule" : "check-circle"} 
                 size={14} 
-                color={studentIsLate ? "#ff6b6b" : "#43e97b"} 
+                color={item.excusedLate ? "#4da0b0" : studentIsLate ? "#ff6b6b" : "#43e97b"} 
               />
               <Text style={[
                 styles.timeText,
-                studentIsLate && styles.lateTimeText
+                item.excusedLate ? styles.excusedTimeText : studentIsLate && styles.lateTimeText
               ]} numberOfLines={1}>
-                Arrived: {item.arrivalTime} {studentIsLate && '(Late)'}
+                Arrived: {item.arrivalTime} {lateLabel}
               </Text>
             </View>
           )}
@@ -535,6 +544,15 @@ const styles = StyleSheet.create({
   },
   lateTimeText: {
     color: '#ff6b6b',
+  },
+  excusedLabel: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4da0b0',
+  },
+  excusedTimeText: {
+    color: '#4da0b0',
   },
   actionButtons: {
     flexDirection: 'row',

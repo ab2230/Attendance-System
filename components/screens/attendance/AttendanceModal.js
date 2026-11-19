@@ -350,6 +350,7 @@ const AttendanceModal = ({ visible, onClose }) => {
     const memberAttendance = attendance.find(a => a.memberId === item.id);
     const arrivalTime = memberAttendance?.arrivalTime;
     const isPresent = memberAttendance?.status === 'Present';
+    const isExcused = memberAttendance?.status === 'Excused';
     const studentIsLate = arrivalTime && isLate(arrivalTime);
 
     return (
@@ -360,6 +361,7 @@ const AttendanceModal = ({ visible, onClose }) => {
           </Text>
           <Text style={styles.memberClass} numberOfLines={1}>
             {item.type || 'Regular'}
+            {isExcused ? ' · Excused' : ''}
           </Text>
           {isPresent && arrivalTime && (
             <View style={styles.timeContainer}>

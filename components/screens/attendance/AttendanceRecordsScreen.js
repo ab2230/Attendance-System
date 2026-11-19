@@ -93,12 +93,15 @@ const AttendanceRecordsScreen = () => {
     );
     if (!record) return { status: "N/A", arrivalTime: null };
     const memberRecord = record.members.find((member) => member.memberId === memberId);
-    return memberRecord
-      ? {
-          status: memberRecord.isLate ? "Late" : memberRecord.status,
-          arrivalTime: memberRecord.arrivalTime,
-        }
-      : { status: "N/A", arrivalTime: null };
+    if (!memberRecord) return { status: "N/A", arrivalTime: null };
+    let status = memberRecord.status;
+    if (memberRecord.status === 'Excused') status = 'Excused Absence';
+    else if (memberRecord.status === 'Present' && memberRecord.excusedLate) status = 'Excused Late';
+    else if (memberRecord.status === 'Present' && memberRecord.isLate) status = 'Late';
+    return {
+      status,
+      arrivalTime: memberRecord.arrivalTime,
+    };
   };
 
   return (
@@ -198,6 +201,8 @@ const AttendanceRecordsScreen = () => {
                     ? styles.late
                     : status === "Absent"
                     ? styles.absent
+                    : status === "Excused Absence" || status === "Excused Late"
+                    ? styles.excused
                     : styles.na,
                 ]}
               >
@@ -302,6 +307,7 @@ const styles = StyleSheet.create({
   present: { color: "green", fontWeight: "600" },
   late: { color: "orange", fontWeight: "600" },
   absent: { color: "red", fontWeight: "600" },
+  excused: { color: "#4da0b0", fontWeight: "600" },
   na: { color: "gray" },
   emptyText: {
     textAlign: "center",
