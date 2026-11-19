@@ -20,7 +20,7 @@ import { ProgramContext } from '../../context/ProgramContext';
 import { MemberContext } from '../../context/MemberContext';
 import { OrganizationContext } from '../../context/OrganizationContext';
 import supabaseService from '../../../services/supabaseService';
-import { permissionTypeLabel } from '../../utils/attendancePermissions';
+import { formatWeekdayRulesSummary } from '../../utils/attendancePermissions';
 import AttendancePermissionModal from './AttendancePermissionModal';
 
 const AttendancePermissionsScreen = ({ navigation, route }) => {
@@ -65,7 +65,7 @@ const AttendancePermissionsScreen = ({ navigation, route }) => {
             e.message?.includes('attendance_permissions') ||
               e.code === '42P01' ||
               e.code === 'PGRST205'
-              ? 'Run supabase/migrations/add_attendance_permissions.sql in the Supabase SQL Editor, then try again.'
+              ? 'Run supabase/migrations/attendance_permissions_weekday_rules.sql in the Supabase SQL Editor, then try again.'
               : e.message || 'Failed to load permissions.',
           );
         }
@@ -118,7 +118,7 @@ const AttendancePermissionsScreen = ({ navigation, route }) => {
     const name = `${item.memberFirstName || ''} ${item.memberLastName || ''}`.trim() || 'Member';
     Alert.alert(
       'Revoke permission?',
-      `Remove ${permissionTypeLabel(item.permissionType)} for ${name} on ${item.permissionDate}?`,
+      `Remove all weekday permissions for ${name} in ${item.programName || 'this program'}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -142,24 +142,12 @@ const AttendancePermissionsScreen = ({ navigation, route }) => {
 
   const renderItem = ({ item }) => {
     const name = `${item.memberFirstName || ''} ${item.memberLastName || ''}`.trim() || 'Member';
-    const isAbsence = item.permissionType === 'excused_absence';
+    const summary = formatWeekdayRulesSummary(item.weekdayRules);
     return (
       <View style={styles.card}>
-        <View style={styles.cardTop}>
-          <View style={[styles.typeChip, isAbsence ? styles.absenceChip : styles.lateChip]}>
-            <Icon
-              name={isAbsence ? 'calendar-remove' : 'clock-outline'}
-              size={14}
-              color={isAbsence ? '#ff6b6b' : '#f39c12'}
-            />
-            <Text style={[styles.typeChipText, isAbsence ? styles.absenceText : styles.lateText]}>
-              {permissionTypeLabel(item.permissionType)}
-            </Text>
-          </View>
-          <Text style={styles.dateText}>{item.permissionDate}</Text>
-        </View>
         <Text style={styles.memberName}>{name}</Text>
         <Text style={styles.programName}>{item.programName || 'Program'}</Text>
+        <Text style={styles.rulesSummary}>{summary}</Text>
         {item.reason ? <Text style={styles.reason}>{item.reason}</Text> : null}
 
         <View style={styles.actions}>
@@ -231,7 +219,7 @@ const AttendancePermissionsScreen = ({ navigation, route }) => {
           <EmptyState
             icon="shield-check-outline"
             title="No permissions yet"
-            message="Create an excused absence or excused lateness for a program member and date."
+            message="Create weekday excuses for a program member — e.g. late on Thursday, absent on Sunday."
           />
         }
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
@@ -283,36 +271,6 @@ const styles = StyleSheet.create({
     borderColor: AppTheme.border,
     padding: 14,
   },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  absenceChip: {
-    backgroundColor: 'rgba(255,107,107,0.12)',
-  },
-  lateChip: {
-    backgroundColor: 'rgba(243,156,18,0.15)',
-  },
-  typeChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  absenceText: { color: '#ff6b6b' },
-  lateText: { color: '#f39c12' },
-  dateText: {
-    color: AppTheme.textMuted,
-    fontSize: 13,
-  },
   memberName: {
     color: AppTheme.textPrimary,
     fontSize: 16,
@@ -322,6 +280,12 @@ const styles = StyleSheet.create({
     color: AppTheme.textSoft,
     fontSize: 13,
     marginTop: 2,
+  },
+  rulesSummary: {
+    color: AppTheme.textPrimary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 8,
   },
   reason: {
     color: AppTheme.textMuted,

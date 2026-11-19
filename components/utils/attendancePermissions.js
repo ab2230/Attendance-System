@@ -10,6 +10,17 @@ export const PERMISSION_TYPE_OPTIONS = [
   { id: PERMISSION_TYPES.EXCUSED_LATENESS, name: 'Excused Lateness' },
 ];
 
+/** JS Date.getDay(): 0 Sunday … 6 Saturday */
+export const WEEKDAY_OPTIONS = [
+  { id: 0, name: 'Sunday' },
+  { id: 1, name: 'Monday' },
+  { id: 2, name: 'Tuesday' },
+  { id: 3, name: 'Wednesday' },
+  { id: 4, name: 'Thursday' },
+  { id: 5, name: 'Friday' },
+  { id: 6, name: 'Saturday' },
+];
+
 export const ATTENDANCE_STATUS = {
   PRESENT: 'Present',
   ABSENT: 'Absent',
@@ -30,7 +41,27 @@ export function toPermissionDateKey(date) {
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().split('T')[0];
+  // Use local calendar date so weekday matches the teacher's selected day.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function weekdayFromDate(date) {
+  if (date == null || date === '') return null;
+  if (typeof date === 'number' && date >= 0 && date <= 6) return date;
+  const key = toPermissionDateKey(date);
+  if (!key) return null;
+  // Parse as local noon to avoid timezone shifting the weekday.
+  const d = new Date(`${key}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getDay();
+}
+
+export function weekdayLabel(weekday) {
+  const found = WEEKDAY_OPTIONS.find((d) => d.id === Number(weekday));
+  return found?.name || `Day ${weekday}`;
 }
 
 export function permissionTypeLabel(type) {
@@ -39,8 +70,40 @@ export function permissionTypeLabel(type) {
   return type || 'Permission';
 }
 
+export function normalizeWeekdayRules(rules = []) {
+  const byDay = new Map();
+  (rules || []).forEach((rule) => {
+    const weekday = Number(rule?.weekday);
+    const permissionType = rule?.permissionType || rule?.permission_type;
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return;
+    if (
+      permissionType !== PERMISSION_TYPES.EXCUSED_ABSENCE &&
+      permissionType !== PERMISSION_TYPES.EXCUSED_LATENESS
+    ) {
+      return;
+    }
+    byDay.set(weekday, { weekday, permissionType });
+  });
+  return Array.from(byDay.values()).sort((a, b) => a.weekday - b.weekday);
+}
+
+export function formatWeekdayRulesSummary(rules = []) {
+  const normalized = normalizeWeekdayRules(rules);
+  if (!normalized.length) return 'No weekdays set';
+  return normalized
+    .map((r) => `${weekdayLabel(r.weekday)}: ${permissionTypeLabel(r.permissionType)}`)
+    .join(' · ');
+}
+
+export function getPermissionTypeForWeekday(permission, weekday) {
+  if (!permission || weekday == null) return null;
+  const rules = normalizeWeekdayRules(permission.weekdayRules || permission.weekday_rules || []);
+  const match = rules.find((r) => r.weekday === Number(weekday));
+  return match?.permissionType || null;
+}
+
 /**
- * Build a lookup: memberId -> permission row for a given program/date set.
+ * Build a lookup: memberId -> permission row for a program.
  */
 export function indexPermissionsByMember(permissions = []) {
   const map = new Map();
@@ -51,27 +114,29 @@ export function indexPermissionsByMember(permissions = []) {
 }
 
 /**
- * Apply standing permissions onto attendance member rows before save.
- * - excused_absence → status Excused (not Absent)
- * - excused_lateness + Present + late → keep Present, mark excusedLate (still isLate for audit)
+ * Apply standing weekday permissions onto attendance member rows before save.
  */
 export function applyPermissionsToMembers(
   members,
   permissions,
-  { classStartTime, lateAfterMinutes = 0 } = {},
+  { classStartTime, lateAfterMinutes = 0, date } = {},
 ) {
+  const weekday = weekdayFromDate(date);
   const byMember = indexPermissionsByMember(permissions);
+
   return (members || []).map((member) => {
     const permission = byMember.get(member.memberId);
-    if (!permission) {
+    const permissionType = getPermissionTypeForWeekday(permission, weekday);
+
+    if (!permissionType) {
       return {
         ...member,
         excusedLate: Boolean(member.excusedLate),
       };
     }
 
-    if (permission.permissionType === PERMISSION_TYPES.EXCUSED_ABSENCE) {
-      // Only convert absence / unmarked / already-excused — never override Present.
+    if (permissionType === PERMISSION_TYPES.EXCUSED_ABSENCE) {
+      // Never override Present — only convert absence / unmarked / already-excused.
       if (member.status === ATTENDANCE_STATUS.PRESENT) {
         return { ...member, excusedLate: Boolean(member.excusedLate) };
       }
@@ -82,11 +147,11 @@ export function applyPermissionsToMembers(
         isLate: false,
         excusedLate: false,
         permissionId: permission.id,
-        permissionType: permission.permissionType,
+        permissionType,
       };
     }
 
-    if (permission.permissionType === PERMISSION_TYPES.EXCUSED_LATENESS) {
+    if (permissionType === PERMISSION_TYPES.EXCUSED_LATENESS) {
       if (member.status !== ATTENDANCE_STATUS.PRESENT) {
         return { ...member, excusedLate: Boolean(member.excusedLate) };
       }
@@ -100,7 +165,7 @@ export function applyPermissionsToMembers(
           isLate: false,
           excusedLate: false,
           permissionId: permission.id,
-          permissionType: permission.permissionType,
+          permissionType,
         };
       }
       return {
@@ -109,7 +174,7 @@ export function applyPermissionsToMembers(
         isLate: true,
         excusedLate: true,
         permissionId: permission.id,
-        permissionType: permission.permissionType,
+        permissionType,
       };
     }
 
@@ -117,9 +182,6 @@ export function applyPermissionsToMembers(
   });
 }
 
-/**
- * Human-readable status for grids / summaries.
- */
 export function getDisplayAttendanceStatus(entry, record) {
   if (!entry) return '—';
   if (entry.status === ATTENDANCE_STATUS.EXCUSED) {

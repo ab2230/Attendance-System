@@ -1,7 +1,10 @@
--- Attendance permissions (excused absence / excused lateness)
--- Run in Supabase → SQL Editor.
+-- Convert attendance permissions from specific dates → weekday rules.
+-- One row per (program, member). weekday_rules is an array like:
+-- [{"weekday":4,"permission_type":"excused_lateness"},{"weekday":0,"permission_type":"excused_absence"}]
+-- weekday uses JS Date.getDay(): 0=Sunday ... 6=Saturday
+-- Run in Supabase → SQL Editor (safe if you already ran add_attendance_permissions.sql).
 
--- Excused absence stored as status = 'Excused'
+-- Ensure Excused status + excused_late column exist
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -23,20 +26,83 @@ CREATE TABLE IF NOT EXISTS public.attendance_permissions (
   organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
   program_id UUID REFERENCES public.programs(id) ON DELETE CASCADE NOT NULL,
   member_id UUID REFERENCES public.members(id) ON DELETE CASCADE NOT NULL,
-  permission_date DATE NOT NULL,
-  permission_type TEXT NOT NULL
-    CHECK (permission_type IN ('excused_absence', 'excused_lateness')),
+  weekday_rules JSONB NOT NULL DEFAULT '[]'::jsonb,
   reason TEXT,
   created_by_user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE (program_id, member_id, permission_date)
+  UNIQUE (program_id, member_id)
 );
+
+-- Migrate legacy date/type columns → weekday_rules if present
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'attendance_permissions'
+      AND column_name = 'permission_date'
+  ) THEN
+    ALTER TABLE public.attendance_permissions
+      ADD COLUMN IF NOT EXISTS weekday_rules JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+    -- Build weekday rules from existing dated rows (keep the type for that weekday)
+    WITH collapsed AS (
+      SELECT
+        organization_id,
+        program_id,
+        member_id,
+        created_by_user_id,
+        reason,
+        jsonb_agg(
+          DISTINCT jsonb_build_object(
+            'weekday', EXTRACT(DOW FROM permission_date)::int,
+            'permission_type', permission_type
+          )
+        ) AS rules,
+        MIN(created_at) AS created_at,
+        MAX(updated_at) AS updated_at
+      FROM public.attendance_permissions
+      GROUP BY organization_id, program_id, member_id, created_by_user_id, reason
+    )
+    UPDATE public.attendance_permissions ap
+    SET weekday_rules = COALESCE(c.rules, '[]'::jsonb)
+    FROM collapsed c
+    WHERE ap.program_id = c.program_id
+      AND ap.member_id = c.member_id;
+
+    -- Deduplicate to one row per program+member (keep newest)
+    DELETE FROM public.attendance_permissions a
+    USING public.attendance_permissions b
+    WHERE a.program_id = b.program_id
+      AND a.member_id = b.member_id
+      AND a.ctid < b.ctid;
+
+    ALTER TABLE public.attendance_permissions
+      DROP CONSTRAINT IF EXISTS attendance_permissions_program_id_member_id_permission_date_key;
+
+    ALTER TABLE public.attendance_permissions
+      DROP COLUMN IF EXISTS permission_date;
+
+    ALTER TABLE public.attendance_permissions
+      DROP COLUMN IF EXISTS permission_type;
+
+    ALTER TABLE public.attendance_permissions
+      DROP CONSTRAINT IF EXISTS attendance_permissions_program_id_member_id_key;
+
+    ALTER TABLE public.attendance_permissions
+      ADD CONSTRAINT attendance_permissions_program_id_member_id_key UNIQUE (program_id, member_id);
+  END IF;
+END $$;
+
+-- If table was created fresh without weekday_rules somehow
+ALTER TABLE public.attendance_permissions
+  ADD COLUMN IF NOT EXISTS weekday_rules JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_attendance_permissions_org
   ON public.attendance_permissions(organization_id);
-CREATE INDEX IF NOT EXISTS idx_attendance_permissions_program_date
-  ON public.attendance_permissions(program_id, permission_date);
+CREATE INDEX IF NOT EXISTS idx_attendance_permissions_program
+  ON public.attendance_permissions(program_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_permissions_member
   ON public.attendance_permissions(member_id);
 
@@ -58,7 +124,7 @@ DROP POLICY IF EXISTS "org_attendance_permissions_delete" ON public.attendance_p
 CREATE POLICY "org_attendance_permissions_delete" ON public.attendance_permissions
   FOR DELETE USING (public.organization_can(organization_id, 'attendance', 'delete'));
 
--- Room check-in: honor excused_lateness for the session date
+-- Room check-in: honor excused_lateness for the session weekday
 CREATE OR REPLACE FUNCTION public.mark_attendance_room_present(
     p_room_id UUID,
     p_client_key TEXT,
@@ -77,6 +143,7 @@ DECLARE
     v_is_late BOOLEAN;
     v_excused_late BOOLEAN := FALSE;
     v_late_after INTEGER;
+    v_weekday INTEGER;
 BEGIN
     IF p_client_key IS NULL OR length(trim(p_client_key)) < 8 THEN
         RETURN jsonb_build_object('ok', false, 'error', 'invalid_client');
@@ -129,12 +196,16 @@ BEGIN
     v_is_late := v_ar.class_start_time IS NOT NULL
         AND v_arrival > (v_ar.class_start_time + (v_late_after * INTERVAL '1 minute'));
 
+    v_weekday := EXTRACT(DOW FROM v_ar.date)::int;
+
     IF v_is_late AND EXISTS (
-      SELECT 1 FROM public.attendance_permissions ap
+      SELECT 1
+      FROM public.attendance_permissions ap,
+           jsonb_array_elements(ap.weekday_rules) AS rule
       WHERE ap.program_id = v_room.program_id
         AND ap.member_id = p_member_id
-        AND ap.permission_date = v_ar.date
-        AND ap.permission_type = 'excused_lateness'
+        AND (rule->>'weekday')::int = v_weekday
+        AND rule->>'permission_type' = 'excused_lateness'
     ) THEN
       v_excused_late := TRUE;
     END IF;

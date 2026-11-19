@@ -11,15 +11,21 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import CustomDropDown from '../../common/CustomDropDown';
 import AppTheme from '../../theme/appTheme';
 import {
   PERMISSION_TYPE_OPTIONS,
   PERMISSION_TYPES,
-  toPermissionDateKey,
+  WEEKDAY_OPTIONS,
+  normalizeWeekdayRules,
 } from '../../utils/attendancePermissions';
+
+const emptyRule = () => ({
+  key: `${Date.now()}-${Math.random()}`,
+  weekday: 4,
+  permissionType: PERMISSION_TYPES.EXCUSED_ABSENCE,
+});
 
 const AttendancePermissionModal = ({
   visible,
@@ -31,9 +37,7 @@ const AttendancePermissionModal = ({
 }) => {
   const [programId, setProgramId] = useState(null);
   const [memberId, setMemberId] = useState(null);
-  const [permissionType, setPermissionType] = useState(PERMISSION_TYPES.EXCUSED_ABSENCE);
-  const [permissionDate, setPermissionDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [rules, setRules] = useState([emptyRule()]);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -45,18 +49,21 @@ const AttendancePermissionModal = ({
     if (editingPermission) {
       setProgramId(editingPermission.programId);
       setMemberId(editingPermission.memberId);
-      setPermissionType(editingPermission.permissionType || PERMISSION_TYPES.EXCUSED_ABSENCE);
-      setPermissionDate(
-        editingPermission.permissionDate
-          ? new Date(`${editingPermission.permissionDate}T12:00:00`)
-          : new Date(),
+      const existing = normalizeWeekdayRules(editingPermission.weekdayRules || []);
+      setRules(
+        existing.length
+          ? existing.map((r) => ({
+              key: `${r.weekday}-${r.permissionType}`,
+              weekday: r.weekday,
+              permissionType: r.permissionType,
+            }))
+          : [emptyRule()],
       );
       setReason(editingPermission.reason || '');
     } else {
       setProgramId(null);
       setMemberId(null);
-      setPermissionType(PERMISSION_TYPES.EXCUSED_ABSENCE);
-      setPermissionDate(new Date());
+      setRules([emptyRule()]);
       setReason('');
     }
     setError('');
@@ -77,12 +84,22 @@ const AttendancePermissionModal = ({
   }, [members, enrolledIds]);
 
   const selectedMemberOption = enrolledMembers.find((m) => m.id === memberId) || null;
-  const selectedTypeOption =
-    PERMISSION_TYPE_OPTIONS.find((o) => o.id === permissionType) || PERMISSION_TYPE_OPTIONS[0];
 
   const handleClose = () => {
     if (submitting) return;
     onClose();
+  };
+
+  const updateRule = (key, patch) => {
+    setRules((prev) => prev.map((rule) => (rule.key === key ? { ...rule, ...patch } : rule)));
+  };
+
+  const addRule = () => {
+    setRules((prev) => [...prev, emptyRule()]);
+  };
+
+  const removeRule = (key) => {
+    setRules((prev) => (prev.length <= 1 ? prev : prev.filter((rule) => rule.key !== key)));
   };
 
   const handleSubmit = async () => {
@@ -95,8 +112,16 @@ const AttendancePermissionModal = ({
       setError('Select a member enrolled in that program.');
       return;
     }
-    if (!permissionType) {
-      setError('Select a permission type.');
+
+    const weekdayRules = normalizeWeekdayRules(rules);
+    if (!weekdayRules.length) {
+      setError('Add at least one weekday with a permission type.');
+      return;
+    }
+
+    const weekdays = weekdayRules.map((r) => r.weekday);
+    if (new Set(weekdays).size !== weekdays.length) {
+      setError('Each weekday can only appear once. Remove the duplicate day.');
       return;
     }
 
@@ -107,8 +132,7 @@ const AttendancePermissionModal = ({
         id: editingPermission?.id,
         programId,
         memberId,
-        permissionType,
-        permissionDate: toPermissionDateKey(permissionDate),
+        weekdayRules,
         reason,
       });
       onClose();
@@ -138,6 +162,11 @@ const AttendancePermissionModal = ({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.content}
           >
+            <Text style={styles.hint}>
+              One permission per member in a program. Add weekdays — e.g. Thursday excused late,
+              Sunday excused absent. They apply every matching attendance day for that program.
+            </Text>
+
             <CustomDropDown
               label="Program"
               data={programs}
@@ -159,38 +188,49 @@ const AttendancePermissionModal = ({
               searchPlaceholder="Search member by name..."
             />
 
-            <CustomDropDown
-              label="Permission type"
-              data={PERMISSION_TYPE_OPTIONS}
-              currentSelected={selectedTypeOption}
-              setSelected={(item) => setPermissionType(item.id)}
-              required
-            />
+            <Text style={styles.label}>Weekday rules *</Text>
+            {rules.map((rule) => {
+              const dayOption = WEEKDAY_OPTIONS.find((d) => d.id === rule.weekday) || WEEKDAY_OPTIONS[0];
+              const typeOption =
+                PERMISSION_TYPE_OPTIONS.find((o) => o.id === rule.permissionType) ||
+                PERMISSION_TYPE_OPTIONS[0];
+              return (
+                <View key={rule.key} style={styles.ruleCard}>
+                  <CustomDropDown
+                    label="Day of week"
+                    data={WEEKDAY_OPTIONS}
+                    currentSelected={dayOption}
+                    setSelected={(item) => updateRule(rule.key, { weekday: item.id })}
+                    required
+                  />
+                  <CustomDropDown
+                    label="Permission type"
+                    data={PERMISSION_TYPE_OPTIONS}
+                    currentSelected={typeOption}
+                    setSelected={(item) => updateRule(rule.key, { permissionType: item.id })}
+                    required
+                  />
+                  {rules.length > 1 ? (
+                    <TouchableOpacity style={styles.removeRuleBtn} onPress={() => removeRule(rule.key)}>
+                      <Icon name="delete-outline" size={18} color={AppTheme.danger} />
+                      <Text style={styles.removeRuleText}>Remove day</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              );
+            })}
 
-            <Text style={styles.label}>Date</Text>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-              <Icon name="calendar" size={18} color={AppTheme.accent} />
-              <Text style={styles.dateText}>{permissionDate.toLocaleDateString()}</Text>
+            <TouchableOpacity style={styles.addRuleBtn} onPress={addRule}>
+              <Icon name="plus-circle-outline" size={20} color={AppTheme.accent} />
+              <Text style={styles.addRuleText}>Add another weekday</Text>
             </TouchableOpacity>
-            {showDatePicker ? (
-              <DateTimePicker
-                value={permissionDate}
-                mode="date"
-                display="default"
-                onChange={(event, date) => {
-                  setShowDatePicker(false);
-                  if (event?.type === 'dismissed') return;
-                  if (date) setPermissionDate(date);
-                }}
-              />
-            ) : null}
 
             <Text style={styles.label}>Reason (optional)</Text>
             <TextInput
               style={styles.reasonInput}
               value={reason}
               onChangeText={setReason}
-              placeholder="e.g. Medical appointment"
+              placeholder="e.g. Work schedule / medical"
               placeholderTextColor={AppTheme.textMuted}
               multiline
             />
@@ -246,27 +286,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 28,
   },
+  hint: {
+    color: AppTheme.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
   label: {
     fontSize: 14,
     color: AppTheme.textSoft,
     marginBottom: 6,
     marginTop: 8,
   },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  ruleCard: {
     backgroundColor: AppTheme.background,
     borderWidth: 1,
     borderColor: AppTheme.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
   },
-  dateText: {
-    color: AppTheme.textPrimary,
-    fontSize: 15,
-    fontWeight: '500',
+  addRuleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  addRuleText: {
+    color: AppTheme.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  removeRuleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  removeRuleText: {
+    color: AppTheme.danger,
+    fontSize: 13,
+    fontWeight: '600',
   },
   reasonInput: {
     minHeight: 80,

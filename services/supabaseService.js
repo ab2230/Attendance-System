@@ -2,6 +2,7 @@ import { supabase } from '../supabase-client';
 import { buildOwnerPermissions } from '../utils/organizationPermissions';
 import {
   applyPermissionsToMembers,
+  normalizeWeekdayRules,
   toPermissionDateKey,
 } from '../components/utils/attendancePermissions';
 
@@ -460,10 +461,7 @@ class SupabaseService {
     const dateKey = toPermissionDateKey(attendanceData.date);
     let permissions = [];
     try {
-      permissions = await this.getAttendancePermissionsForDate(
-        attendanceData.programId,
-        dateKey,
-      );
+      permissions = await this.getAttendancePermissionsForProgram(attendanceData.programId);
     } catch (error) {
       // Permissions table may not be migrated yet — continue without applying.
       console.warn('Could not load attendance permissions:', error?.message || error);
@@ -473,6 +471,7 @@ class SupabaseService {
     return applyPermissionsToMembers(attendanceData.members || [], permissions, {
       classStartTime: attendanceData.classStartTime,
       lateAfterMinutes: lateAfter,
+      date: dateKey,
     });
   }
 
@@ -747,7 +746,7 @@ class SupabaseService {
     }
   }
 
-  // Attendance permissions (excused absence / lateness)
+  // Attendance permissions (weekday rules per program + member)
   _mapAttendancePermission(row) {
     if (!row) return null;
     return {
@@ -755,8 +754,7 @@ class SupabaseService {
       organizationId: row.organization_id,
       programId: row.program_id,
       memberId: row.member_id,
-      permissionDate: row.permission_date,
-      permissionType: row.permission_type,
+      weekdayRules: normalizeWeekdayRules(row.weekday_rules || []),
       reason: row.reason || '',
       createdByUserId: row.created_by_user_id,
       createdAt: row.created_at,
@@ -767,7 +765,14 @@ class SupabaseService {
     };
   }
 
-  async getAttendancePermissions({ programId = null, startDate = null, endDate = null } = {}) {
+  _weekdayRulesForDb(rules) {
+    return normalizeWeekdayRules(rules).map((rule) => ({
+      weekday: rule.weekday,
+      permission_type: rule.permissionType,
+    }));
+  }
+
+  async getAttendancePermissions({ programId = null } = {}) {
     const orgId = this._requireOrgId();
     let query = supabase
       .from('attendance_permissions')
@@ -777,26 +782,22 @@ class SupabaseService {
         members (first_name, last_name)
       `)
       .eq('organization_id', orgId)
-      .order('permission_date', { ascending: false });
+      .order('updated_at', { ascending: false });
 
     if (programId) query = query.eq('program_id', programId);
-    if (startDate) query = query.gte('permission_date', toPermissionDateKey(startDate));
-    if (endDate) query = query.lte('permission_date', toPermissionDateKey(endDate));
 
     const { data, error } = await query;
     if (error) throw error;
     return (data || []).map((row) => this._mapAttendancePermission(row));
   }
 
-  async getAttendancePermissionsForDate(programId, date) {
+  async getAttendancePermissionsForProgram(programId) {
     const orgId = this._requireOrgId();
-    const dateKey = toPermissionDateKey(date);
     const { data, error } = await supabase
       .from('attendance_permissions')
       .select('*')
       .eq('organization_id', orgId)
-      .eq('program_id', programId)
-      .eq('permission_date', dateKey);
+      .eq('program_id', programId);
 
     if (error) throw error;
     return (data || []).map((row) => this._mapAttendancePermission(row));
@@ -805,20 +806,22 @@ class SupabaseService {
   async createAttendancePermission({
     programId,
     memberId,
-    permissionDate,
-    permissionType,
+    weekdayRules = [],
     reason = '',
   }) {
     const user = await this.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
     const orgId = this._requireOrgId();
+    const rules = this._weekdayRulesForDb(weekdayRules);
+    if (!rules.length) {
+      throw new Error('Add at least one weekday rule.');
+    }
 
     const payload = {
       organization_id: orgId,
       program_id: programId,
       member_id: memberId,
-      permission_date: toPermissionDateKey(permissionDate),
-      permission_type: permissionType,
+      weekday_rules: rules,
       reason: String(reason || '').trim() || null,
       created_by_user_id: user.id,
     };
@@ -835,7 +838,7 @@ class SupabaseService {
 
     if (error) {
       if (error.code === '23505') {
-        throw new Error('A permission already exists for this member, program, and date.');
+        throw new Error('This member already has a permission for this program. Edit it instead.');
       }
       throw error;
     }
@@ -843,8 +846,7 @@ class SupabaseService {
   }
 
   async updateAttendancePermission(permissionId, {
-    permissionType,
-    permissionDate,
+    weekdayRules,
     reason,
     programId,
     memberId,
@@ -852,8 +854,13 @@ class SupabaseService {
     const updates = {
       updated_at: new Date().toISOString(),
     };
-    if (permissionType != null) updates.permission_type = permissionType;
-    if (permissionDate != null) updates.permission_date = toPermissionDateKey(permissionDate);
+    if (weekdayRules != null) {
+      const rules = this._weekdayRulesForDb(weekdayRules);
+      if (!rules.length) {
+        throw new Error('Add at least one weekday rule.');
+      }
+      updates.weekday_rules = rules;
+    }
     if (reason !== undefined) updates.reason = String(reason || '').trim() || null;
     if (programId != null) updates.program_id = programId;
     if (memberId != null) updates.member_id = memberId;
@@ -871,7 +878,7 @@ class SupabaseService {
 
     if (error) {
       if (error.code === '23505') {
-        throw new Error('A permission already exists for this member, program, and date.');
+        throw new Error('This member already has a permission for this program. Edit it instead.');
       }
       throw error;
     }
