@@ -513,11 +513,48 @@ class SupabaseService {
     if (!row) return null;
     return {
       id: row.id,
+      organizationId: row.organization_id,
+      programId: row.program_id,
       memberId: row.member_id,
       permissionType: row.permission_type,
       attendanceDate: row.attendance_date,
       reason: row.reason || '',
+      createdAt: row.created_at,
+      programName: row.programs?.name || null,
+      memberFirstName: row.members?.first_name || '',
+      memberLastName: row.members?.last_name || '',
     };
+  }
+
+  async getEmergencyPermissions({ programId = null } = {}) {
+    const orgId = this._requireOrgId();
+    let query = supabase
+      .from('attendance_emergency_permissions')
+      .select(`
+        *,
+        programs (name),
+        members (first_name, last_name)
+      `)
+      .eq('organization_id', orgId)
+      .order('attendance_date', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (programId) query = query.eq('program_id', programId);
+
+    const { data, error } = await query;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST205') return [];
+      throw error;
+    }
+    return (data || []).map((row) => this._mapEmergencyPermission(row));
+  }
+
+  async deleteEmergencyPermission(permissionId) {
+    const { error } = await supabase
+      .from('attendance_emergency_permissions')
+      .delete()
+      .eq('id', permissionId);
+    if (error) throw error;
   }
 
   async getEmergencyPermissionsForProgramAndDate(programId, date) {
