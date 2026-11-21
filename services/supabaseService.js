@@ -304,18 +304,39 @@ class SupabaseService {
     }
   }
 
-  async addProgram(name, maxLateMinutes = 60, lateAfterMinutes = 0) {
+  async addProgram(
+    name,
+    maxLateMinutes = 60,
+    lateAfterMinutes = 0,
+    emergencyPermissionMonthlyLimit = null,
+    emergencyPermissionSubmissionDaysAfter = 1,
+  ) {
     try {
       const user = await this.getCurrentUser();
       if (!user) throw new Error('User not authenticated');
 
       const orgId = this._requireOrgId();
+      const limitPayload =
+        emergencyPermissionMonthlyLimit === undefined
+          ? null
+          : emergencyPermissionMonthlyLimit;
+      const parsedLimit =
+        limitPayload === null || limitPayload === ''
+          ? null
+          : Math.max(0, parseInt(String(limitPayload), 10) || 0);
+      const daysAfter = Math.max(
+        0,
+        parseInt(String(emergencyPermissionSubmissionDaysAfter), 10) || 0,
+      );
+
       const { data, error } = await supabase
         .from('programs')
         .insert([{
           name,
           max_late_minutes: Number(maxLateMinutes) || 60,
           late_after_minutes: Math.max(0, Number(lateAfterMinutes) || 0),
+          emergency_permission_monthly_limit: parsedLimit,
+          emergency_permission_submission_days_after: daysAfter,
           user_id: user.id,
           organization_id: orgId,
         }])
@@ -342,6 +363,37 @@ class SupabaseService {
         payload.late_after_minutes = Math.max(
           0,
           Number(updates.lateAfterMinutes ?? updates.late_after_minutes) || 0,
+        );
+      }
+      if (
+        updates.emergencyPermissionMonthlyLimit !== undefined
+        || updates.emergency_permission_monthly_limit !== undefined
+      ) {
+        const raw =
+          updates.emergencyPermissionMonthlyLimit
+          ?? updates.emergency_permission_monthly_limit;
+        if (raw === null || raw === '') {
+          payload.emergency_permission_monthly_limit = null;
+        } else {
+          payload.emergency_permission_monthly_limit = Math.max(
+            0,
+            parseInt(String(raw), 10) || 0,
+          );
+        }
+      }
+      if (
+        updates.emergencyPermissionSubmissionDaysAfter !== undefined
+        || updates.emergency_permission_submission_days_after !== undefined
+      ) {
+        payload.emergency_permission_submission_days_after = Math.max(
+          0,
+          parseInt(
+            String(
+              updates.emergencyPermissionSubmissionDaysAfter
+              ?? updates.emergency_permission_submission_days_after,
+            ),
+            10,
+          ) || 0,
         );
       }
 
@@ -457,14 +509,53 @@ class SupabaseService {
     }
   }
 
+  _mapEmergencyPermission(row) {
+    if (!row) return null;
+    return {
+      id: row.id,
+      memberId: row.member_id,
+      permissionType: row.permission_type,
+      attendanceDate: row.attendance_date,
+      reason: row.reason || '',
+    };
+  }
+
+  async getEmergencyPermissionsForProgramAndDate(programId, date) {
+    const orgId = this._requireOrgId();
+    const dateKey = toPermissionDateKey(date);
+    if (!dateKey) return [];
+
+    const { data, error } = await supabase
+      .from('attendance_emergency_permissions')
+      .select('*')
+      .eq('organization_id', orgId)
+      .eq('program_id', programId)
+      .eq('attendance_date', dateKey);
+
+    if (error) {
+      if (error.code === '42P01') return [];
+      throw error;
+    }
+    return (data || []).map((row) => this._mapEmergencyPermission(row));
+  }
+
   async _resolveMembersWithPermissions(attendanceData) {
     const dateKey = toPermissionDateKey(attendanceData.date);
     let permissions = [];
+    let emergencyPermissions = [];
     try {
       permissions = await this.getAttendancePermissionsForProgram(attendanceData.programId);
     } catch (error) {
       // Permissions table may not be migrated yet — continue without applying.
       console.warn('Could not load attendance permissions:', error?.message || error);
+    }
+    try {
+      emergencyPermissions = await this.getEmergencyPermissionsForProgramAndDate(
+        attendanceData.programId,
+        dateKey,
+      );
+    } catch (error) {
+      console.warn('Could not load emergency permissions:', error?.message || error);
     }
 
     const lateAfter = Math.max(0, Number(attendanceData.lateAfterMinutes) || 0);
@@ -472,6 +563,7 @@ class SupabaseService {
       classStartTime: attendanceData.classStartTime,
       lateAfterMinutes: lateAfter,
       date: dateKey,
+      emergencyPermissions,
     });
   }
 

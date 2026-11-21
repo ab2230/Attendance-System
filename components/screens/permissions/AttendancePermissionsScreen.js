@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import TopNavigator from '../../common/TopNavigator';
@@ -21,6 +22,7 @@ import { MemberContext } from '../../context/MemberContext';
 import { OrganizationContext } from '../../context/OrganizationContext';
 import supabaseService from '../../../services/supabaseService';
 import { formatWeekdayRulesSummary } from '../../utils/attendancePermissions';
+import { buildProgramPermissionUrl } from '../../../utils/checkInUrl';
 import AttendancePermissionModal from './AttendancePermissionModal';
 
 const AttendancePermissionsScreen = ({ navigation, route }) => {
@@ -101,6 +103,61 @@ const AttendancePermissionsScreen = ({ navigation, route }) => {
 
   const selectedFilterProgram =
     programFilterOptions.find((p) => p.id === filterProgramId) || programFilterOptions[0];
+
+  const focusedProgram = useMemo(() => {
+    if (!filterProgramId) return null;
+    return programs.find((p) => p.id === filterProgramId) || null;
+  }, [programs, filterProgramId]);
+
+  const permissionRequestUrl = filterProgramId
+    ? buildProgramPermissionUrl(filterProgramId)
+    : null;
+
+  const emergencyRequestsEnabled =
+    focusedProgram != null
+    && focusedProgram.emergencyPermissionMonthlyLimit != null
+    && focusedProgram.emergencyPermissionMonthlyLimit > 0;
+
+  const handleSharePermissionLink = async () => {
+    if (!permissionRequestUrl) return;
+    try {
+      await Share.share({
+        message: permissionRequestUrl,
+        url: permissionRequestUrl,
+        title: 'Permission request link',
+      });
+    } catch {
+      Alert.alert('Permission request link', permissionRequestUrl);
+    }
+  };
+
+  const renderEmergencyLinkSection = () => {
+    if (!filterProgramId || !permissionRequestUrl) return null;
+    return (
+      <View style={styles.emergencyLinkCard}>
+        <View style={styles.emergencyLinkHeader}>
+          <Icon name="web" size={20} color={AppTheme.accent} />
+          <Text style={styles.emergencyLinkTitle}>Member permission request link</Text>
+        </View>
+        <Text style={styles.emergencyLinkHint}>
+          {emergencyRequestsEnabled
+            ? `Share once with members. They can submit up to ${focusedProgram.emergencyPermissionMonthlyLimit} emergency request(s) per calendar month.`
+            : 'Set “Emergency requests per month” when editing this program to enable web submissions. You can still share the link in advance.'}
+        </Text>
+        <Text style={styles.emergencyLinkUrl} selectable>
+          {permissionRequestUrl}
+        </Text>
+        <TouchableOpacity
+          style={styles.emergencyShareBtn}
+          onPress={handleSharePermissionLink}
+          activeOpacity={0.85}
+        >
+          <Icon name="share-variant" size={18} color={AppTheme.background} />
+          <Text style={styles.emergencyShareText}>Share permission link</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const handleSave = async (payload) => {
     if (payload.id) {
@@ -212,6 +269,7 @@ const AttendancePermissionsScreen = ({ navigation, route }) => {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={renderEmergencyLinkSection}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppTheme.accent} />
         }
@@ -258,6 +316,52 @@ const styles = StyleSheet.create({
   filterWrap: {
     paddingHorizontal: 16,
     paddingTop: 8,
+  },
+  emergencyLinkCard: {
+    marginBottom: 16,
+    backgroundColor: AppTheme.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: AppTheme.border,
+    padding: 14,
+  },
+  emergencyLinkHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  emergencyLinkTitle: {
+    color: AppTheme.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  emergencyLinkHint: {
+    color: AppTheme.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  emergencyLinkUrl: {
+    color: AppTheme.textSoft,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  emergencyShareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    backgroundColor: AppTheme.accent,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  emergencyShareText: {
+    color: AppTheme.background,
+    fontWeight: '700',
+    fontSize: 14,
   },
   listContent: {
     padding: 16,

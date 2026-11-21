@@ -24,6 +24,10 @@ const AddProgramModal = ({
   setMaxLateMinutes,
   lateAfterMinutes,
   setLateAfterMinutes,
+  emergencyPermissionMonthlyLimit,
+  setEmergencyPermissionMonthlyLimit,
+  emergencyPermissionSubmissionDaysAfter,
+  setEmergencyPermissionSubmissionDaysAfter,
 }) => {
   const { addProgram, updateProgram, loading } = useContext(ProgramContext);
   const [localLoading, setLocalLoading] = useState(false);
@@ -41,6 +45,16 @@ const AddProgramModal = ({
         setLateAfterMinutes?.(
           String(editingProgram.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES)
         );
+        setEmergencyPermissionMonthlyLimit?.(
+          editingProgram.emergencyPermissionMonthlyLimit == null
+            ? ''
+            : String(editingProgram.emergencyPermissionMonthlyLimit),
+        );
+        setEmergencyPermissionSubmissionDaysAfter?.(
+          String(
+            editingProgram.emergencyPermissionSubmissionDaysAfter ?? 1,
+          ),
+        );
       } else {
         if (!maxLateMinutes) {
           setMaxLateMinutes?.(String(DEFAULT_MAX_LATE_MINUTES));
@@ -48,6 +62,8 @@ const AddProgramModal = ({
         if (lateAfterMinutes == null || lateAfterMinutes === '') {
           setLateAfterMinutes?.(String(DEFAULT_LATE_AFTER_MINUTES));
         }
+        setEmergencyPermissionMonthlyLimit?.('');
+        setEmergencyPermissionSubmissionDaysAfter?.('1');
       }
 
       Animated.parallel([
@@ -103,6 +119,28 @@ const AddProgramModal = ({
         setShowErrorModal(true);
         return;
       }
+
+      const limitRaw = String(emergencyPermissionMonthlyLimit ?? '').trim();
+      const parsedEmergencyLimit =
+        limitRaw === '' ? null : parseInt(limitRaw, 10);
+      if (
+        limitRaw !== ''
+        && (!Number.isFinite(parsedEmergencyLimit) || parsedEmergencyLimit < 0)
+      ) {
+        setError('Emergency monthly limit must be 0 or greater (leave blank to disable).');
+        setShowErrorModal(true);
+        return;
+      }
+
+      const submissionDays = parseInt(
+        String(emergencyPermissionSubmissionDaysAfter ?? '1').trim(),
+        10,
+      );
+      if (!Number.isFinite(submissionDays) || submissionDays < 0) {
+        setError('Submission deadline must be 0 or more days after the session.');
+        setShowErrorModal(true);
+        return;
+      }
       
       setLocalLoading(true);
       setError(null);
@@ -111,6 +149,8 @@ const AddProgramModal = ({
         name: programName.trim(),
         maxLateMinutes: lateMinutes,
         lateAfterMinutes: lateAfter,
+        emergencyPermissionMonthlyLimit: parsedEmergencyLimit,
+        emergencyPermissionSubmissionDaysAfter: submissionDays,
       };
       
       if (isEditing && editingProgram) {
@@ -123,6 +163,8 @@ const AddProgramModal = ({
       setProgramName('');
       setMaxLateMinutes?.(String(DEFAULT_MAX_LATE_MINUTES));
       setLateAfterMinutes?.(String(DEFAULT_LATE_AFTER_MINUTES));
+      setEmergencyPermissionMonthlyLimit?.('');
+      setEmergencyPermissionSubmissionDaysAfter?.('1');
       onClose();
       
     } catch (error) {
@@ -208,6 +250,36 @@ const AddProgramModal = ({
               />
               <Text style={styles.helperText}>
                 Arrivals within this many minutes after class start count as on time. After that, they are marked late (e.g. 30).
+              </Text>
+
+              <CustomTextInput 
+                label="Emergency requests per month"
+                input={String(emergencyPermissionMonthlyLimit ?? '')}
+                placeholder="Eg: 3 (blank = disabled)"
+                setInput={(value) =>
+                  setEmergencyPermissionMonthlyLimit?.(value.replace(/[^0-9]/g, ''))
+                }
+                keyboardType="numeric"
+                containerStyle={styles.inputField}
+              />
+              <Text style={styles.helperText}>
+                Maximum one-time permission requests a member can submit per calendar month for this program. Leave empty to disable web self-service.
+              </Text>
+
+              <CustomTextInput 
+                label="Submit until (days after session)"
+                input={String(emergencyPermissionSubmissionDaysAfter ?? '1')}
+                placeholder="Eg: 1"
+                setInput={(value) =>
+                  setEmergencyPermissionSubmissionDaysAfter?.(
+                    value.replace(/[^0-9]/g, ''),
+                  )
+                }
+                keyboardType="numeric"
+                containerStyle={styles.inputField}
+              />
+              <Text style={styles.helperText}>
+                Members may submit through this many days after the session date (inclusive). Example: 1 allows the session day and the following day.
               </Text>
 
               <LoadingButton

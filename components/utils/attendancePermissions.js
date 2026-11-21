@@ -114,20 +114,38 @@ export function indexPermissionsByMember(permissions = []) {
 }
 
 /**
+ * One-time emergency permission for a specific attendance date (memberId -> row).
+ */
+export function indexEmergencyPermissionsByMember(emergencyPermissions = []) {
+  const map = new Map();
+  (emergencyPermissions || []).forEach((p) => {
+    const memberId = p?.memberId || p?.member_id;
+    const permissionType = p?.permissionType || p?.permission_type;
+    if (!memberId || !permissionType) return;
+    map.set(memberId, { memberId, permissionType, id: p?.id || null });
+  });
+  return map;
+}
+
+/**
  * Apply standing weekday permissions onto attendance member rows before save.
  */
 export function applyPermissionsToMembers(
   members,
   permissions,
-  { classStartTime, lateAfterMinutes = 0, date } = {},
+  { classStartTime, lateAfterMinutes = 0, date, emergencyPermissions = [] } = {},
 ) {
   const weekday = weekdayFromDate(date);
   const byMember = indexPermissionsByMember(permissions);
+  const emergencyByMember = indexEmergencyPermissionsByMember(emergencyPermissions);
 
   return (members || []).map((member) => {
     const permission = byMember.get(member.memberId);
-    const permissionType = getPermissionTypeForWeekday(permission, weekday);
+    const emergency = emergencyByMember.get(member.memberId);
+    const permissionType =
+      emergency?.permissionType || getPermissionTypeForWeekday(permission, weekday);
 
+    const permissionRowId = emergency?.id || permission?.id;
     if (!permissionType) {
       return {
         ...member,
@@ -146,7 +164,7 @@ export function applyPermissionsToMembers(
         arrivalTime: null,
         isLate: false,
         excusedLate: false,
-        permissionId: permission.id,
+        permissionId: permissionRowId,
         permissionType,
       };
     }
@@ -164,7 +182,7 @@ export function applyPermissionsToMembers(
           ...member,
           isLate: false,
           excusedLate: false,
-          permissionId: permission.id,
+          permissionId: permissionRowId,
           permissionType,
         };
       }
@@ -173,7 +191,7 @@ export function applyPermissionsToMembers(
         status: ATTENDANCE_STATUS.PRESENT,
         isLate: true,
         excusedLate: true,
-        permissionId: permission.id,
+        permissionId: permissionRowId,
         permissionType,
       };
     }

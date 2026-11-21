@@ -24,6 +24,9 @@ const ProgramList = ({navigation}) => {
   const [programName, setProgramName] = useState('');
   const [maxLateMinutes, setMaxLateMinutes] = useState(String(DEFAULT_MAX_LATE_MINUTES));
   const [lateAfterMinutes, setLateAfterMinutes] = useState(String(DEFAULT_LATE_AFTER_MINUTES));
+  const [emergencyPermissionMonthlyLimit, setEmergencyPermissionMonthlyLimit] = useState('');
+  const [emergencyPermissionSubmissionDaysAfter, setEmergencyPermissionSubmissionDaysAfter] =
+    useState('1');
   const [showModal, setShowModal] = useState(false);
   const [editingProgram, setEditingProgram] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,6 +55,14 @@ const ProgramList = ({navigation}) => {
     setProgramName(item.name);
     setMaxLateMinutes(String(item.maxLateMinutes ?? DEFAULT_MAX_LATE_MINUTES));
     setLateAfterMinutes(String(item.lateAfterMinutes ?? DEFAULT_LATE_AFTER_MINUTES));
+    setEmergencyPermissionMonthlyLimit(
+      item.emergencyPermissionMonthlyLimit == null
+        ? ''
+        : String(item.emergencyPermissionMonthlyLimit),
+    );
+    setEmergencyPermissionSubmissionDaysAfter(
+      String(item.emergencyPermissionSubmissionDaysAfter ?? 1),
+    );
     setShowModal(true);
   };
 
@@ -200,12 +211,18 @@ const ProgramList = ({navigation}) => {
         setMaxLateMinutes={setMaxLateMinutes}
         lateAfterMinutes={lateAfterMinutes}
         setLateAfterMinutes={setLateAfterMinutes}
+        emergencyPermissionMonthlyLimit={emergencyPermissionMonthlyLimit}
+        setEmergencyPermissionMonthlyLimit={setEmergencyPermissionMonthlyLimit}
+        emergencyPermissionSubmissionDaysAfter={emergencyPermissionSubmissionDaysAfter}
+        setEmergencyPermissionSubmissionDaysAfter={setEmergencyPermissionSubmissionDaysAfter}
         onClose={() => {
           setShowModal(false);
           setEditingProgram(null);
           setProgramName("");
           setMaxLateMinutes(String(DEFAULT_MAX_LATE_MINUTES));
           setLateAfterMinutes(String(DEFAULT_LATE_AFTER_MINUTES));
+          setEmergencyPermissionMonthlyLimit('');
+          setEmergencyPermissionSubmissionDaysAfter('1');
         }}
         isEditing={!!editingProgram}
         editingProgram={editingProgram}
@@ -231,6 +248,8 @@ const ProgramList = ({navigation}) => {
           setProgramName('');
           setMaxLateMinutes(String(DEFAULT_MAX_LATE_MINUTES));
           setLateAfterMinutes(String(DEFAULT_LATE_AFTER_MINUTES));
+          setEmergencyPermissionMonthlyLimit('');
+          setEmergencyPermissionSubmissionDaysAfter('1');
           setShowModal(true);
         }} 
         style={styles.addButton}

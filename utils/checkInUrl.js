@@ -7,6 +7,11 @@ export function buildProgramCheckInUrl(programId) {
   return `${base}/?program=${programId}`;
 }
 
+export function buildProgramPermissionUrl(programId) {
+  const base = WEB_BASE_URL.replace(/\/$/, '');
+  return `${base}/permission?program=${programId}`;
+}
+
 export function buildLegacyRoomCheckInUrl(roomId) {
   const base = WEB_BASE_URL.replace(/\/$/, '');
   return `${base}/?room=${roomId}`;
